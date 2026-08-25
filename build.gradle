@@ -32,9 +32,9 @@ dependencies {
     testImplementation "org.postgresql:postgresql:${postgresqlDriverVersion}"
     testImplementation 'org.testng:testng:7.12.0'
 
-    testImplementation 'org.testcontainers:testcontainers:1.21.3'
-    testImplementation 'org.testcontainers:postgresql:1.21.3'
-    testImplementation 'org.testcontainers:mysql:1.21.3'
+    testImplementation 'org.testcontainers:testcontainers:1.21.4'
+    testImplementation 'org.testcontainers:postgresql:1.21.4'
+    testImplementation 'org.testcontainers:mysql:1.21.4'
     testImplementation "com.mysql:mysql-connector-j:${mysqlDriverVersion}"
     testImplementation "org.xerial:sqlite-jdbc:${sqliteDriverVersion}"
 
