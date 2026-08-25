@@ -20,7 +20,7 @@ repositories {
 
 def postgresqlDriverVersion = project.findProperty('postgresqlDriverVersion') ?: '42.7.13'
 def mysqlDriverVersion = project.findProperty('mysqlDriverVersion') ?: '9.3.0'
-def sqliteDriverVersion = project.findProperty('sqliteDriverVersion') ?: '3.49.1.0'
+def sqliteDriverVersion = project.findProperty('sqliteDriverVersion') ?: '3.53.2.1'
 
 dependencies {
     compileOnly "org.postgresql:postgresql:${postgresqlDriverVersion}"
