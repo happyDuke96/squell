@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distribution: [ corretto, temurin ]
+        drivers: [ pinned ]
+        include:
+          - distribution: corretto
+            drivers: latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: ${{ matrix.distribution }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run fast test suite
+        run: |
+          if [ "${{ matrix.drivers }}" = "latest" ]; then
+            ./gradlew test -PpostgresqlDriverVersion=latest.release -PmysqlDriverVersion=latest.release -PsqliteDriverVersion=latest.release
+          else
+            ./gradlew test
+          fi
+
+      - name: Run integration tests
+        run: |
+          if [ "${{ matrix.drivers }}" = "latest" ]; then
+            ./gradlew integrationTest -PpostgresqlDriverVersion=latest.release -PmysqlDriverVersion=latest.release -PsqliteDriverVersion=latest.release
+          else
+            ./gradlew integrationTest
+          fi
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.distribution }}-${{ matrix.drivers }}
+          path: build/reports/tests/
+
+  dependency-graph:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'corretto'
+
+      - name: Submit dependency graph
+        uses: gradle/actions/dependency-submission@v4

@@ -1,0 +1,95 @@
+plugins {
+    id 'java-library'
+    id 'com.vanniktech.maven.publish' version '0.34.0'
+}
+
+group = 'io.github.happyduke96'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    maven {
+        url = 'https://repo1.maven.org/maven2/'
+    }
+}
+
+def postgresqlDriverVersion = project.findProperty('postgresqlDriverVersion') ?: '42.7.13'
+def mysqlDriverVersion = project.findProperty('mysqlDriverVersion') ?: '9.3.0'
+def sqliteDriverVersion = project.findProperty('sqliteDriverVersion') ?: '3.49.1.0'
+
+dependencies {
+    compileOnly "org.postgresql:postgresql:${postgresqlDriverVersion}"
+    compileOnly 'org.jetbrains:annotations:26.1.0'
+
+    testAnnotationProcessor sourceSets.main.output
+
+    testImplementation 'com.h2database:h2:2.3.232'
+    testImplementation "org.postgresql:postgresql:${postgresqlDriverVersion}"
+    testImplementation 'org.testng:testng:7.12.0'
+
+    testImplementation 'org.testcontainers:testcontainers:1.21.3'
+    testImplementation 'org.testcontainers:postgresql:1.21.3'
+    testImplementation 'org.testcontainers:mysql:1.21.3'
+    testImplementation "com.mysql:mysql-connector-j:${mysqlDriverVersion}"
+    testImplementation "org.xerial:sqlite-jdbc:${sqliteDriverVersion}"
+
+    testImplementation 'commons-codec:commons-codec:1.16.1'
+    constraints {
+        // CVE-2024-25710 / CVE-2024-26308 (commons-compress < 1.26.0).
+        testImplementation('org.apache.commons:commons-compress:1.26.0')
+        // CVE-2025-48924 (commons-lang3 < 3.18.0), pulled by commons-compress itself.
+        testImplementation('org.apache.commons:commons-lang3:3.18.0')
+    }
+}
+
+test {
+    useTestNG {
+        excludeGroups 'integration'
+    }
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'Runs integration tests against real databases.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useTestNG {
+        includeGroups 'integration'
+    }
+    shouldRunAfter test
+}
+
+
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
+
+    coordinates('io.github.happyduke96', 'squell', '0.1.0')
+
+    pom {
+        name = 'squell'
+        description = 'SQL query builder for Java'
+        url = 'https://github.com/happyDuke96/squell'
+        licenses {
+            license {
+                name = 'Apache License 2.0'
+                url = 'https://github.com/happyDuke96/squell/blob/main/LICENSE'
+            }
+        }
+        developers {
+            developer {
+                id = 'happyDuke96'
+                name = 'Abbos'
+            }
+        }
+        scm {
+            url = 'https://github.com/happyDuke96/squell'
+            connection = 'scm:git:https://github.com/happyDuke96/squell.git'
+        }
+    }
+}
