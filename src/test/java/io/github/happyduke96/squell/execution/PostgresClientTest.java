@@ -34,15 +34,21 @@ public class PostgresClientTest {
         posts = new PostTable();
 
         authorId = UUID.randomUUID();
-        client.insert(new AuthorTable()).values(new AuthorTable().create(authorId, "Ada Lovelace")).execute();
+        client.insert(new AuthorTable())
+                .values(new AuthorTable().create(authorId, "Ada Lovelace"))
+                .execute();
     }
 
     @Test
     public void insertThenFetchWithWhereFindsTheInsertedRow() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "Zero-reflection SQL", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "Zero-reflection SQL", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).where(posts.id().eq(id)).fetch();
+        List<Post> found = client.select(posts)
+                .where(posts.id().eq(id))
+                .fetch();
 
         assertEquals(found.size(), 1);
         assertEquals(found.getFirst().title(), "Zero-reflection SQL");
@@ -51,9 +57,13 @@ public class PostgresClientTest {
     @Test
     public void byIdComesFreeFromTheBaseTableInterfaceWithNoCodegenForIt() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "found-via-byId", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "found-via-byId", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).where(posts.byId(id)).fetch();
+        List<Post> found = client.select(posts)
+                .where(posts.byId(id))
+                .fetch();
 
         assertEquals(found.size(), 1);
         assertEquals(found.getFirst().title(), "found-via-byId");
@@ -62,7 +72,9 @@ public class PostgresClientTest {
     @Test
     public void whereCombinesWithAndAcrossMultipleCalls() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "Zero-reflection SQL", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "Zero-reflection SQL", Post.Status.PUBLISHED))
+                .execute();
 
         List<Post> found = client.select(posts)
                 .where(posts.title().eq("Zero-reflection SQL"))
@@ -74,8 +86,12 @@ public class PostgresClientTest {
 
     @Test
     public void whereReturnsANewStepAndLeavesTheOriginalUnfiltered() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "draft-post", Post.Status.DRAFT)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "published-post", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "draft-post", Post.Status.DRAFT))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "published-post", Post.Status.PUBLISHED))
+                .execute();
 
         SelectStep<Post> base = client.select(posts);
         SelectStep<Post> onlyPublished = base.where(posts.status().eq(Post.Status.PUBLISHED));
@@ -87,7 +103,9 @@ public class PostgresClientTest {
     @Test
     public void loggedSelectStepDecoratesWithoutChangingTheResult() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "decorated-fetch", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "decorated-fetch", Post.Status.PUBLISHED))
+                .execute();
 
         SelectStep<Post> decorated = new LoggedSelectStep<>(client.select(posts))
                 .where(posts.id().eq(id));
@@ -100,15 +118,20 @@ public class PostgresClientTest {
 
     @Test
     public void selectWithNoWhereCallFetchesEveryRow() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.DRAFT)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.DRAFT))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.PUBLISHED))
+                .execute();
 
         assertEquals(client.select(posts).fetch().size(), 2);
     }
 
     private void insertNumberedPosts(int count) throws SQLException {
         for (int i = 0; i < count; i++) {
-            client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "post-" + i, Post.Status.DRAFT))
+            client.insert(posts)
+                    .values(posts.create(UUID.randomUUID(), authorId, "post-" + i, Post.Status.DRAFT))
                     .execute();
         }
     }
@@ -117,7 +140,9 @@ public class PostgresClientTest {
     public void fetchPageBundlesTheSlicedContentWithTheTotalCount() throws SQLException {
         insertNumberedPosts(5);
 
-        Page<Post> firstPage = client.select(posts).orderBy(posts.title()).fetchPage(0, 2);
+        Page<Post> firstPage = client.select(posts)
+                .orderBy(posts.title())
+                .fetchPage(0, 2);
 
         assertEquals(firstPage.content().size(), 2);
         assertEquals(firstPage.totalElements(), 5);
@@ -129,7 +154,9 @@ public class PostgresClientTest {
     public void fetchPageOnTheLastPageReportsNoNext() throws SQLException {
         insertNumberedPosts(5);
 
-        Page<Post> lastPage = client.select(posts).orderBy(posts.title()).fetchPage(2, 2);
+        Page<Post> lastPage = client.select(posts)
+                .orderBy(posts.title())
+                .fetchPage(2, 2);
 
         assertEquals(lastPage.content().size(), 1);
         assertFalse(lastPage.hasNext());
@@ -147,7 +174,9 @@ public class PostgresClientTest {
     public void fetchSliceFetchesOneExtraRowToDeriveHasNextWithoutCounting() throws SQLException {
         insertNumberedPosts(3);
 
-        Slice<Post> slice = client.select(posts).orderBy(posts.title()).fetchSlice(2);
+        Slice<Post> slice = client.select(posts)
+                .orderBy(posts.title())
+                .fetchSlice(2);
 
         assertEquals(slice.content().size(), 2);
         assertTrue(slice.hasNext());
@@ -157,7 +186,9 @@ public class PostgresClientTest {
     public void fetchSliceOnTheLastPageReportsNoNext() throws SQLException {
         insertNumberedPosts(3);
 
-        Slice<Post> slice = client.select(posts).orderBy(posts.title()).fetchSlice(10);
+        Slice<Post> slice = client.select(posts)
+                .orderBy(posts.title())
+                .fetchSlice(10);
 
         assertEquals(slice.content().size(), 3);
         assertFalse(slice.hasNext());
@@ -167,7 +198,9 @@ public class PostgresClientTest {
     public void fetchSliceCombinesWithAKeysetWhereConditionForCursorPagination() throws SQLException {
         insertNumberedPosts(5);
 
-        Slice<Post> firstSlice = client.select(posts).orderBy(posts.title()).fetchSlice(2);
+        Slice<Post> firstSlice = client.select(posts)
+                .orderBy(posts.title())
+                .fetchSlice(2);
         String cursor = firstSlice.content().getLast().title();
 
         Slice<Post> secondSlice = client.select(posts)
@@ -183,8 +216,12 @@ public class PostgresClientTest {
     public void updateChangesOnlyTheMatchingRow() throws SQLException {
         UUID matching = UUID.randomUUID();
         UUID other = UUID.randomUUID();
-        client.insert(posts).values(posts.create(matching, authorId, "draft-post", Post.Status.DRAFT)).execute();
-        client.insert(posts).values(posts.create(other, authorId, "other-draft", Post.Status.DRAFT)).execute();
+        client.insert(posts)
+                .values(posts.create(matching, authorId, "draft-post", Post.Status.DRAFT))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(other, authorId, "other-draft", Post.Status.DRAFT))
+                .execute();
 
         int updated = client.update(posts)
                 .set(posts.status(), Post.Status.PUBLISHED)
@@ -192,23 +229,34 @@ public class PostgresClientTest {
                 .execute();
 
         assertEquals(updated, 1);
-        assertEquals(client.select(posts).where(posts.id().eq(matching)).fetch().getFirst().status(),
-                Post.Status.PUBLISHED);
-        assertEquals(client.select(posts).where(posts.id().eq(other)).fetch().getFirst().status(),
-                Post.Status.DRAFT);
+        assertEquals(client.select(posts)
+                .where(posts.id().eq(matching))
+                .fetch()
+                .getFirst()
+                .status(), Post.Status.PUBLISHED);
+        assertEquals(client.select(posts)
+                .where(posts.id().eq(other))
+                .fetch()
+                .getFirst()
+                .status(), Post.Status.DRAFT);
     }
 
     @Test
     public void setReturnsANewStepAndLeavesTheOriginalWithoutThatAssignment() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "immutable-update", Post.Status.DRAFT)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "immutable-update", Post.Status.DRAFT))
+                .execute();
 
         UpdateStep<Post> withStatus = client.update(posts).set(posts.status(), Post.Status.PUBLISHED);
         UpdateStep<Post> withStatusAndTitle = withStatus.set(posts.title(), "renamed");
 
         withStatusAndTitle.where(posts.id().eq(id)).execute();
 
-        Post reloaded = client.select(posts).where(posts.id().eq(id)).fetch().getFirst();
+        Post reloaded = client.select(posts)
+                .where(posts.id().eq(id))
+                .fetch()
+                .getFirst();
         assertEquals(reloaded.status(), Post.Status.PUBLISHED);
         assertEquals(reloaded.title(), "renamed");
     }
@@ -217,13 +265,19 @@ public class PostgresClientTest {
     public void setWithAnotherFieldCopiesItsValueOnTheSameRow() throws SQLException {
         AccountTable accounts = new AccountTable();
         UUID id = UUID.randomUUID();
-        client.insert(accounts).values(accounts.create(id, 100, 25)).execute();
+        client.insert(accounts)
+                .values(accounts.create(id, 100, 25))
+                .execute();
 
-        client.update(accounts).set(accounts.balance(), accounts.pendingBalance())
+        client.update(accounts)
+                .set(accounts.balance(), accounts.pendingBalance())
                 .where(accounts.id().eq(id))
                 .execute();
 
-        Account reloaded = client.select(accounts).where(accounts.id().eq(id)).fetch().getFirst();
+        Account reloaded = client.select(accounts)
+                .where(accounts.id().eq(id))
+                .fetch()
+                .getFirst();
         assertEquals(reloaded.balance(), 25);
         assertEquals(reloaded.pendingBalance(), 25);
     }
@@ -231,7 +285,9 @@ public class PostgresClientTest {
     @Test
     public void updateWithNoSetCallFailsClearly() {
         IllegalStateException thrown = expectThrows(IllegalStateException.class,
-                () -> client.update(posts).where(posts.id().eq(UUID.randomUUID())).execute());
+                () -> client.update(posts)
+                        .where(posts.id().eq(UUID.randomUUID()))
+                        .execute());
 
         assertEquals(thrown.getMessage(), "UPDATE [posts] requires at least one set(...) call.");
     }
@@ -239,7 +295,9 @@ public class PostgresClientTest {
     @Test
     public void updateAndReturnWithNoSetCallFailsClearly() {
         IllegalStateException thrown = expectThrows(IllegalStateException.class,
-                () -> client.update(posts).where(posts.id().eq(UUID.randomUUID())).updateAndReturn());
+                () -> client.update(posts)
+                        .where(posts.id().eq(UUID.randomUUID()))
+                        .updateAndReturn());
 
         assertEquals(thrown.getMessage(), "UPDATE [posts] requires at least one set(...) call.");
     }
@@ -248,10 +306,16 @@ public class PostgresClientTest {
     public void deleteRemovesOnlyTheMatchingRow() throws SQLException {
         UUID matching = UUID.randomUUID();
         UUID other = UUID.randomUUID();
-        client.insert(posts).values(posts.create(matching, authorId, "delete-me", Post.Status.DRAFT)).execute();
-        client.insert(posts).values(posts.create(other, authorId, "keep-me", Post.Status.DRAFT)).execute();
+        client.insert(posts)
+                .values(posts.create(matching, authorId, "delete-me", Post.Status.DRAFT))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(other, authorId, "keep-me", Post.Status.DRAFT))
+                .execute();
 
-        int deleted = client.delete(posts).where(posts.id().eq(matching)).execute();
+        int deleted = client.delete(posts)
+                .where(posts.id().eq(matching))
+                .execute();
 
         assertEquals(deleted, 1);
         assertEquals(client.select(posts).fetch().size(), 1);
@@ -276,44 +340,79 @@ public class PostgresClientTest {
 
     @Test
     public void orderByOrdersResultsAscendingBySpecifiedField() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "charlie", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "bravo", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "charlie", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "bravo", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).orderBy(posts.title()).fetch();
+        List<Post> found = client.select(posts)
+                .orderBy(posts.title())
+                .fetch();
 
         assertEquals(found.stream().map(Post::title).toList(), List.of("alpha", "bravo", "charlie"));
     }
 
     @Test
     public void orderByDescOrdersResultsDescendingBySpecifiedField() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "charlie", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "bravo", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "charlie", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "bravo", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).orderByDesc(posts.title()).fetch();
+        List<Post> found = client.select(posts)
+                .orderByDesc(posts.title())
+                .fetch();
 
         assertEquals(found.stream().map(Post::title).toList(), List.of("charlie", "bravo", "alpha"));
     }
 
     @Test
     public void orderByAddsASecondSortKeyInsteadOfReplacingTheFirst() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "multi-b", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "multi-a", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "multi-c", Post.Status.DRAFT)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "multi-b", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "multi-a", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "multi-c", Post.Status.DRAFT))
+                .execute();
 
-        List<Post> found = client.select(posts).orderBy(posts.status()).orderBy(posts.title()).fetch();
+        List<Post> found = client.select(posts)
+                .orderBy(posts.status())
+                .orderBy(posts.title())
+                .fetch();
 
         assertEquals(found.stream().map(Post::title).toList(), List.of("multi-c", "multi-a", "multi-b"));
     }
 
     @Test
     public void limitAndOffsetPageThroughOrderedResults() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "bravo", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "charlie", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "bravo", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "charlie", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> secondRow = client.select(posts).orderBy(posts.title()).limit(1).offset(1).fetch();
+        List<Post> secondRow = client.select(posts)
+                .orderBy(posts.title())
+                .limit(1)
+                .offset(1)
+                .fetch();
 
         assertEquals(secondRow.size(), 1);
         assertEquals(secondRow.getFirst().title(), "bravo");
@@ -337,49 +436,77 @@ public class PostgresClientTest {
 
     @Test
     public void distinctRemovesDuplicateValuesFromFetchColumn() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "c", Post.Status.DRAFT)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "c", Post.Status.DRAFT))
+                .execute();
 
-        List<Post.Status> statuses = client.select(posts).distinct().fetchColumn(posts.status());
+        List<Post.Status> statuses = client.select(posts)
+                .distinct()
+                .fetchColumn(posts.status());
 
         assertEquals(statuses.size(), 2);
     }
 
     @Test
     public void fetchOneReturnsEmptyWhenNoRowMatches() throws SQLException {
-        Optional<Post> found = client.select(posts).where(posts.title().eq("does-not-exist")).fetchOne();
+        Optional<Post> found = client.select(posts)
+                .where(posts.title().eq("does-not-exist"))
+                .fetchOne();
 
         assertTrue(found.isEmpty());
     }
 
     @Test
     public void fetchOneThrowsWhenMoreThanOneRowMatches() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "dup", Post.Status.DRAFT)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "dup", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "dup", Post.Status.DRAFT))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "dup", Post.Status.PUBLISHED))
+                .execute();
 
         IllegalStateException thrown = expectThrows(IllegalStateException.class,
-                () -> client.select(posts).where(posts.title().eq("dup")).fetchOne());
+                () -> client.select(posts)
+                        .where(posts.title().eq("dup"))
+                        .fetchOne());
 
         assertEquals(thrown.getMessage(), "Query for [posts] returned more than one row.");
     }
 
     @Test
     public void fetchColumnProjectsOntoOneFieldInOrderByOrder() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "charlie", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "charlie", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED))
+                .execute();
 
-        List<String> titles = client.select(posts).orderBy(posts.title()).fetchColumn(posts.title());
+        List<String> titles = client.select(posts)
+                .orderBy(posts.title())
+                .fetchColumn(posts.title());
 
         assertEquals(titles, List.of("alpha", "charlie"));
     }
 
     @Test
     public void countReturnsTheNumberOfMatchingRows() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.DRAFT)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.DRAFT))
+                .execute();
 
-        long count = client.select(posts).where(posts.status().eq(Post.Status.PUBLISHED)).count();
+        long count = client.select(posts)
+                .where(posts.status().eq(Post.Status.PUBLISHED))
+                .count();
 
         assertEquals(count, 1);
     }
@@ -387,8 +514,12 @@ public class PostgresClientTest {
     @Test
     public void transactionCommitsAllStepsOnSuccess() throws SQLException {
         client.transaction(tx -> {
-            tx.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "commit-1", Post.Status.DRAFT)).execute();
-            tx.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "commit-2", Post.Status.DRAFT)).execute();
+            tx.insert(posts)
+                    .values(posts.create(UUID.randomUUID(), authorId, "commit-1", Post.Status.DRAFT))
+                    .execute();
+            tx.insert(posts)
+                    .values(posts.create(UUID.randomUUID(), authorId, "commit-2", Post.Status.DRAFT))
+                    .execute();
             return null;
         });
 
@@ -399,7 +530,9 @@ public class PostgresClientTest {
     public void transactionRollsBackAllStepsOnException() throws SQLException {
         try {
             client.transaction(tx -> {
-                tx.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "rollback-1", Post.Status.DRAFT)).execute();
+                tx.insert(posts)
+                        .values(posts.create(UUID.randomUUID(), authorId, "rollback-1", Post.Status.DRAFT))
+                        .execute();
                 throw new IllegalStateException("simulated failure after the insert");
             });
         } catch (IllegalStateException expected) {
@@ -412,15 +545,18 @@ public class PostgresClientTest {
     @Test
     public void transactionWithoutResultCommitsOnSuccess() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.transactionWithoutResult(tx ->
-                tx.insert(posts).values(posts.create(id, authorId, "tx-without-result", Post.Status.PUBLISHED)).execute());
+        client.transactionWithoutResult(tx -> tx.insert(posts)
+                .values(posts.create(id, authorId, "tx-without-result", Post.Status.PUBLISHED))
+                .execute());
 
         assertEquals(client.select(posts).where(posts.id().eq(id)).fetch().size(), 1);
     }
 
     @Test
     public void rawSqlQueryMapsRowsWithAFunctionalRowMapper() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "raw-sql", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "raw-sql", Post.Status.PUBLISHED))
+                .execute();
 
         List<String> titles = client.sql("SELECT title FROM posts WHERE status = ?", "PUBLISHED")
                 .result(row -> row.getString("title"));
@@ -431,7 +567,9 @@ public class PostgresClientTest {
     @Test
     public void rawSqlUsesTableAsAReadyMadeRowMapperForWholeRows() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "raw-table-mapper", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "raw-table-mapper", Post.Status.PUBLISHED))
+                .execute();
 
         List<Post> found = client.sql("SELECT * FROM posts WHERE id = ?", id).result(posts);
 
@@ -441,9 +579,12 @@ public class PostgresClientTest {
 
     @Test
     public void rawSqlUpdateRunsAnArbitraryStatement() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "raw-update", Post.Status.DRAFT)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "raw-update", Post.Status.DRAFT))
+                .execute();
 
-        int updated = client.sql("UPDATE posts SET status = ? WHERE title = ?", "PUBLISHED", "raw-update").execute();
+        int updated = client.sql("UPDATE posts SET status = ? WHERE title = ?", "PUBLISHED", "raw-update")
+                .execute();
 
         assertEquals(updated, 1);
     }
@@ -488,21 +629,35 @@ public class PostgresClientTest {
 
     @Test
     public void inFiltersByAnyOfSeveralValues() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.DRAFT)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "c", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.DRAFT))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "c", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).where(posts.status().in(List.of(Post.Status.PUBLISHED))).fetch();
+        List<Post> found = client.select(posts)
+                .where(posts.status().in(List.of(Post.Status.PUBLISHED)))
+                .fetch();
 
         assertEquals(found.size(), 2);
     }
 
     @Test
     public void notInExcludesMatchingRows() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.DRAFT)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "a", Post.Status.DRAFT))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "b", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).where(posts.status().notIn(List.of(Post.Status.DRAFT))).fetch();
+        List<Post> found = client.select(posts)
+                .where(posts.status().notIn(List.of(Post.Status.DRAFT)))
+                .fetch();
 
         assertEquals(found.size(), 1);
         assertEquals(found.getFirst().title(), "b");
@@ -510,20 +665,32 @@ public class PostgresClientTest {
 
     @Test
     public void likeMatchesAPattern() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "Zero-reflection SQL", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "Other post", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "Zero-reflection SQL", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "Other post", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).where(posts.title().like("Zero%")).fetch();
+        List<Post> found = client.select(posts)
+                .where(posts.title().like("Zero%"))
+                .fetch();
 
         assertEquals(found.size(), 1);
     }
 
     @Test
     public void notLikeExcludesAMatchingPattern() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "Zero-reflection SQL", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "Other post", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "Zero-reflection SQL", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "Other post", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).where(posts.title().notLike("Zero%")).fetch();
+        List<Post> found = client.select(posts)
+                .where(posts.title().notLike("Zero%"))
+                .fetch();
 
         assertEquals(found.size(), 1);
         assertEquals(found.getFirst().title(), "Other post");
@@ -531,11 +698,19 @@ public class PostgresClientTest {
 
     @Test
     public void betweenFiltersByRange() throws SQLException {
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "mid", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "zeta", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "alpha", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "mid", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "zeta", Post.Status.PUBLISHED))
+                .execute();
 
-        List<Post> found = client.select(posts).where(posts.title().between("b", "n")).fetch();
+        List<Post> found = client.select(posts)
+                .where(posts.title().between("b", "n"))
+                .fetch();
 
         assertEquals(found.size(), 1);
         assertEquals(found.getFirst().title(), "mid");
@@ -544,14 +719,20 @@ public class PostgresClientTest {
     @Test
     public void inSubQueryFiltersUsingAnEmbeddedSelect() throws SQLException {
         UUID publishedId = UUID.randomUUID();
-        client.insert(posts).values(posts.create(publishedId, authorId, "subquery-published", Post.Status.PUBLISHED)).execute();
-        client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "subquery-draft", Post.Status.DRAFT)).execute();
+        client.insert(posts)
+                .values(posts.create(publishedId, authorId, "subquery-published", Post.Status.PUBLISHED))
+                .execute();
+        client.insert(posts)
+                .values(posts.create(UUID.randomUUID(), authorId, "subquery-draft", Post.Status.DRAFT))
+                .execute();
 
         SubQuery<UUID> publishedIds = client.select(posts)
                 .where(posts.status().eq(Post.Status.PUBLISHED))
                 .subQuery(posts.id());
 
-        List<Post> found = client.select(posts).where(posts.id().in(publishedIds)).fetch();
+        List<Post> found = client.select(posts)
+                .where(posts.id().in(publishedIds))
+                .fetch();
 
         assertEquals(found.size(), 1);
         assertEquals(found.getFirst().id(), publishedId);
@@ -591,7 +772,9 @@ public class PostgresClientTest {
     @Test
     public void forUpdateStillFetchesTheMatchingRowsInsideATransaction() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "locked-row", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "locked-row", Post.Status.PUBLISHED))
+                .execute();
 
         Optional<Post> found = client.transaction(tx -> tx.select(posts)
                 .where(posts.id().eq(id))
@@ -604,7 +787,9 @@ public class PostgresClientTest {
     @Test
     public void forUpdateSkipLockedStillFetchesTheMatchingRowsInsideATransaction() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "skip-locked-row", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "skip-locked-row", Post.Status.PUBLISHED))
+                .execute();
 
         Optional<Post> found = client.transaction(tx -> tx.select(posts)
                 .where(posts.id().eq(id))
@@ -617,7 +802,9 @@ public class PostgresClientTest {
     @Test
     public void forUpdateNoWaitStillFetchesTheMatchingRowsInsideATransaction() throws SQLException {
         UUID id = UUID.randomUUID();
-        client.insert(posts).values(posts.create(id, authorId, "nowait-row", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(id, authorId, "nowait-row", Post.Status.PUBLISHED))
+                .execute();
 
         Optional<Post> found = client.transaction(tx -> tx.select(posts)
                 .where(posts.id().eq(id))
@@ -632,23 +819,32 @@ public class PostgresClientTest {
         UUID id = UUID.randomUUID();
 
         client.transaction(IsolationLevel.SERIALIZABLE, tx -> {
-            tx.insert(posts).values(posts.create(id, authorId, "serializable-row", Post.Status.DRAFT)).execute();
+            tx.insert(posts)
+                    .values(posts.create(id, authorId, "serializable-row", Post.Status.DRAFT))
+                    .execute();
             return null;
         });
 
-        assertEquals(client.select(posts).where(posts.id().eq(id)).fetch().getFirst().title(), "serializable-row");
+        assertEquals(client.select(posts)
+                .where(posts.id().eq(id))
+                .fetch()
+                .getFirst()
+                .title(), "serializable-row");
     }
 
     @Test
     public void transactionWithoutResultAcceptsAnIsolationLevel() throws SQLException {
         UUID id = UUID.randomUUID();
 
-        client.transactionWithoutResult(IsolationLevel.REPEATABLE_READ, tx ->
-                tx.insert(posts).values(posts.create(id, authorId, "repeatable-read-row", Post.Status.DRAFT))
-                        .execute());
+        client.transactionWithoutResult(IsolationLevel.REPEATABLE_READ, tx -> tx.insert(posts)
+                .values(posts.create(id, authorId, "repeatable-read-row", Post.Status.DRAFT))
+                .execute());
 
-        assertEquals(client.select(posts).where(posts.id().eq(id)).fetch().getFirst().title(),
-                "repeatable-read-row");
+        assertEquals(client.select(posts)
+                .where(posts.id().eq(id))
+                .fetch()
+                .getFirst()
+                .title(), "repeatable-read-row");
     }
 
     @Test
@@ -656,8 +852,12 @@ public class PostgresClientTest {
         UUID id = UUID.randomUUID();
 
         Optional<Post> foundThroughTheNestedRequiredTransaction = client.transaction(tx -> {
-            tx.insert(posts).values(posts.create(id, authorId, "required-row", Post.Status.DRAFT)).execute();
-            return tx.transaction(inner -> inner.select(posts).where(posts.id().eq(id)).fetchOne());
+            tx.insert(posts)
+                    .values(posts.create(id, authorId, "required-row", Post.Status.DRAFT))
+                    .execute();
+            return tx.transaction(inner -> inner.select(posts)
+                    .where(posts.id().eq(id))
+                    .fetchOne());
         });
 
         assertEquals(foundThroughTheNestedRequiredTransaction.map(Post::title), Optional.of("required-row"));
@@ -669,7 +869,8 @@ public class PostgresClientTest {
 
         expectThrows(SQLException.class, () -> client.transaction(tx -> {
             tx.transaction(inner -> {
-                inner.insert(posts).values(posts.create(id, authorId, "required-rollback", Post.Status.DRAFT))
+                inner.insert(posts)
+                        .values(posts.create(id, authorId, "required-rollback", Post.Status.DRAFT))
                         .execute();
                 return null;
             });
@@ -685,14 +886,19 @@ public class PostgresClientTest {
 
         expectThrows(SQLException.class, () -> client.transaction(tx -> {
             tx.transactionRequiringNew(inner -> {
-                inner.insert(posts).values(posts.create(id, authorId, "requires-new-row", Post.Status.DRAFT))
+                inner.insert(posts)
+                        .values(posts.create(id, authorId, "requires-new-row", Post.Status.DRAFT))
                         .execute();
                 return null;
             });
             throw new SQLException("boom");
         }));
 
-        assertEquals(client.select(posts).where(posts.id().eq(id)).fetch().getFirst().title(), "requires-new-row");
+        assertEquals(client.select(posts)
+                .where(posts.id().eq(id))
+                .fetch()
+                .getFirst()
+                .title(), "requires-new-row");
     }
 
     @Test
@@ -701,10 +907,13 @@ public class PostgresClientTest {
         UUID nestedId = UUID.randomUUID();
 
         client.transaction(tx -> {
-            tx.insert(posts).values(posts.create(outerId, authorId, "outer-row", Post.Status.DRAFT)).execute();
+            tx.insert(posts)
+                    .values(posts.create(outerId, authorId, "outer-row", Post.Status.DRAFT))
+                    .execute();
 
             expectThrows(RuntimeException.class, () -> tx.transactionNested(inner -> {
-                inner.insert(posts).values(posts.create(nestedId, authorId, "nested-row", Post.Status.DRAFT))
+                inner.insert(posts)
+                        .values(posts.create(nestedId, authorId, "nested-row", Post.Status.DRAFT))
                         .execute();
                 throw new RuntimeException("nested failure");
             }));
@@ -724,8 +933,9 @@ public class PostgresClientTest {
 
         expectThrows(SQLException.class, () -> client.transaction(tx -> {
             tx.transactionNested(inner -> {
-                inner.insert(posts).values(posts.create(nestedId, authorId, "nested-committed-row",
-                        Post.Status.DRAFT)).execute();
+                inner.insert(posts)
+                        .values(posts.create(nestedId, authorId, "nested-committed-row", Post.Status.DRAFT))
+                        .execute();
                 return null;
             });
             throw new SQLException("outer boom");
@@ -733,6 +943,33 @@ public class PostgresClientTest {
 
         assertTrue(client.select(posts).where(posts.id().eq(nestedId)).fetch().isEmpty(),
                 "A released savepoint isn't a real commit — it must still roll back with the outer transaction.");
+    }
+
+    @Test
+    public void transactionWithoutResultVariantsAvoidTheReturnNullBoilerplate() throws SQLException {
+        UUID requiredId = UUID.randomUUID();
+        UUID requiresNewId = UUID.randomUUID();
+        UUID nestedId = UUID.randomUUID();
+
+        client.transaction(outer -> {
+            outer.transactionWithoutResult(tx -> tx.insert(posts)
+                    .values(posts.create(requiredId, authorId, "required-row", Post.Status.DRAFT))
+                    .execute());
+
+            outer.transactionWithoutResultRequiringNew(tx -> tx.insert(posts)
+                    .values(posts.create(requiresNewId, authorId, "requires-new-row", Post.Status.DRAFT))
+                    .execute());
+
+            outer.transactionWithoutResultNested(tx -> tx.insert(posts)
+                    .values(posts.create(nestedId, authorId, "nested-row", Post.Status.DRAFT))
+                    .execute());
+
+            return null;
+        });
+
+        assertEquals(client.select(posts).where(posts.id().eq(requiredId)).fetch().size(), 1);
+        assertEquals(client.select(posts).where(posts.id().eq(requiresNewId)).fetch().size(), 1);
+        assertEquals(client.select(posts).where(posts.id().eq(nestedId)).fetch().size(), 1);
     }
 
 }

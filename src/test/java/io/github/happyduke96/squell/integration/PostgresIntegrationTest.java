@@ -100,7 +100,9 @@ public class PostgresIntegrationTest {
     public void executeAndReturnReturnsTheInsertedRow() throws SQLException {
         InventoryItem inserted = new InventoryItemTable().create(UUID.randomUUID(), "SKU-RETURN", 5);
 
-        InventoryItem returned = client.insert(new InventoryItemTable()).values(inserted).executeAndReturn();
+        InventoryItem returned = client.insert(new InventoryItemTable())
+                .values(inserted)
+                .executeAndReturn();
 
         assertEquals(returned.sku(), "SKU-RETURN");
         assertEquals(returned.quantity(), 5);
@@ -110,10 +112,13 @@ public class PostgresIntegrationTest {
     public void onConflictDoUpdateAppliesWhenAConflictOccurs() throws SQLException {
         InventoryItemTable items = new InventoryItemTable();
         UUID originalId = UUID.randomUUID();
-        client.insert(items).values(items.create(originalId, "SKU-CONFLICT", 1)).execute();
+        client.insert(items)
+                .values(items.create(originalId, "SKU-CONFLICT", 1))
+                .execute();
 
         InventoryItem attempted = items.create(UUID.randomUUID(), "SKU-CONFLICT", 99);
-        InventoryItem result = client.insert(items).values(attempted)
+        InventoryItem result = client.insert(items)
+                .values(attempted)
                 .onConflict(items.sku())
                 .doUpdate(items.quantity());
 
@@ -126,7 +131,8 @@ public class PostgresIntegrationTest {
         InventoryItemTable items = new InventoryItemTable();
         UUID id = UUID.randomUUID();
 
-        InventoryItem result = client.insert(items).values(items.create(id, "SKU-FRESH-UPDATE", 7))
+        InventoryItem result = client.insert(items)
+                .values(items.create(id, "SKU-FRESH-UPDATE", 7))
                 .onConflict(items.sku())
                 .doUpdate(items.quantity());
 
@@ -137,7 +143,9 @@ public class PostgresIntegrationTest {
     @Test
     public void onConflictDoNothingReturnsEmptyWhenConflictOccurs() throws SQLException {
         InventoryItemTable items = new InventoryItemTable();
-        client.insert(items).values(items.create(UUID.randomUUID(), "SKU-DO-NOTHING", 1)).execute();
+        client.insert(items)
+                .values(items.create(UUID.randomUUID(), "SKU-DO-NOTHING", 1))
+                .execute();
 
         Optional<InventoryItem> result = client.insert(items)
                 .values(items.create(UUID.randomUUID(), "SKU-DO-NOTHING", 2))
@@ -146,7 +154,10 @@ public class PostgresIntegrationTest {
 
         assertTrue(result.isEmpty());
 
-        InventoryItem unchanged = client.select(items).where(items.sku().eq("SKU-DO-NOTHING")).fetch().getFirst();
+        InventoryItem unchanged = client.select(items)
+                .where(items.sku().eq("SKU-DO-NOTHING"))
+                .fetch()
+                .getFirst();
         assertEquals(unchanged.quantity(), 1);
     }
 
@@ -167,7 +178,9 @@ public class PostgresIntegrationTest {
     public void updateAndReturnReturnsTheUpdatedRow() throws SQLException {
         InventoryItemTable items = new InventoryItemTable();
         UUID id = UUID.randomUUID();
-        client.insert(items).values(items.create(id, "SKU-UPDATE-RETURN", 1)).execute();
+        client.insert(items)
+                .values(items.create(id, "SKU-UPDATE-RETURN", 1))
+                .execute();
 
         List<InventoryItem> updated = client.update(items)
                 .set(items.quantity(), 42)
@@ -182,13 +195,20 @@ public class PostgresIntegrationTest {
     public void deleteAndReturnReturnsTheDeletedRow() throws SQLException {
         InventoryItemTable items = new InventoryItemTable();
         UUID id = UUID.randomUUID();
-        client.insert(items).values(items.create(id, "SKU-DELETE-RETURN", 1)).execute();
+        client.insert(items)
+                .values(items.create(id, "SKU-DELETE-RETURN", 1))
+                .execute();
 
-        List<InventoryItem> deleted = client.delete(items).where(items.id().eq(id)).deleteAndReturn();
+        List<InventoryItem> deleted = client.delete(items)
+                .where(items.id().eq(id))
+                .deleteAndReturn();
 
         assertEquals(deleted.size(), 1);
         assertEquals(deleted.getFirst().sku(), "SKU-DELETE-RETURN");
-        assertTrue(client.select(items).where(items.id().eq(id)).fetch().isEmpty());
+        assertTrue(client.select(items)
+                .where(items.id().eq(id))
+                .fetch()
+                .isEmpty());
     }
 
     @Test
@@ -197,10 +217,15 @@ public class PostgresIntegrationTest {
                 new DurationIntervalConverter(), new IntRangeConverter());
         UUID id = UUID.randomUUID();
 
-        client.insert(types).values(types.create(id, "{\"lang\":\"java\"}", List.of("sql", "oop"),
-                Duration.ofDays(1).plusHours(2), new Range<>(1, 10))).execute();
+        client.insert(types)
+                .values(types.create(id, "{\"lang\":\"java\"}", List.of("sql", "oop"),
+                        Duration.ofDays(1).plusHours(2), new Range<>(1, 10)))
+                .execute();
 
-        PostgresTypes found = client.select(types).where(types.id().eq(id)).fetch().getFirst();
+        PostgresTypes found = client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .getFirst();
 
         // Postgres normalizes jsonb's stored text (e.g. inserts whitespace), so this checks
         // content, not the exact byte-for-byte string.
@@ -213,10 +238,15 @@ public class PostgresIntegrationTest {
                 new DurationIntervalConverter(), new IntRangeConverter());
         UUID id = UUID.randomUUID();
 
-        client.insert(types).values(types.create(id, "{}", List.of("sql", "oop", "java"),
-                Duration.ofMinutes(30), new Range<>(0, 1))).execute();
+        client.insert(types)
+                .values(types.create(id, "{}", List.of("sql", "oop", "java"),
+                        Duration.ofMinutes(30), new Range<>(0, 1)))
+                .execute();
 
-        PostgresTypes found = client.select(types).where(types.id().eq(id)).fetch().getFirst();
+        PostgresTypes found = client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .getFirst();
 
         assertEquals(found.tags(), List.of("sql", "oop", "java"));
     }
@@ -228,9 +258,14 @@ public class PostgresIntegrationTest {
         UUID id = UUID.randomUUID();
         Duration original = Duration.ofDays(3).plusHours(4).plusMinutes(5).plusSeconds(6);
 
-        client.insert(types).values(types.create(id, "{}", List.of(), original, new Range<>(0, 1))).execute();
+        client.insert(types)
+                .values(types.create(id, "{}", List.of(), original, new Range<>(0, 1)))
+                .execute();
 
-        PostgresTypes found = client.select(types).where(types.id().eq(id)).fetch().getFirst();
+        PostgresTypes found = client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .getFirst();
 
         assertEquals(found.duration(), original);
     }
@@ -241,9 +276,14 @@ public class PostgresIntegrationTest {
                 new DurationIntervalConverter(), new IntRangeConverter());
         UUID id = UUID.randomUUID();
 
-        client.insert(types).values(types.create(id, "{}", List.of(), Duration.ZERO, new Range<>(5, 15))).execute();
+        client.insert(types)
+                .values(types.create(id, "{}", List.of(), Duration.ZERO, new Range<>(5, 15)))
+                .execute();
 
-        PostgresTypes found = client.select(types).where(types.id().eq(id)).fetch().getFirst();
+        PostgresTypes found = client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .getFirst();
 
         assertEquals(found.range(), new Range<>(5, 15));
     }
@@ -252,10 +292,13 @@ public class PostgresIntegrationTest {
     public void doUpdateIncrementingAtomicallyBumpsTheCounterOnConflict() throws SQLException {
         InventoryItemTable items = new InventoryItemTable();
         UUID originalId = UUID.randomUUID();
-        client.insert(items).values(items.create(originalId, "SKU-COUNTER", 1)).execute();
+        client.insert(items)
+                .values(items.create(originalId, "SKU-COUNTER", 1))
+                .execute();
 
         InventoryItem attempted = items.create(UUID.randomUUID(), "SKU-COUNTER", 99);
-        InventoryItem result = client.insert(items).values(attempted)
+        InventoryItem result = client.insert(items)
+                .values(attempted)
                 .onConflict(items.sku())
                 .doUpdateIncrementing(items.quantity(), 1);
 
@@ -267,7 +310,9 @@ public class PostgresIntegrationTest {
     public void forUpdateSkipLockedExcludesARowLockedByAnotherRealTransaction() throws SQLException {
         InventoryItemTable items = new InventoryItemTable();
         UUID id = UUID.randomUUID();
-        client.insert(items).values(items.create(id, "SKU-LOCKED", 3)).execute();
+        client.insert(items)
+                .values(items.create(id, "SKU-LOCKED", 3))
+                .execute();
 
         try (Connection lockHolder = dataSource.getConnection()) {
             lockHolder.setAutoCommit(false);
@@ -297,7 +342,9 @@ public class PostgresIntegrationTest {
     public void forUpdateNoWaitFailsImmediatelyInsteadOfBlockingOnALockedRow() throws SQLException {
         InventoryItemTable items = new InventoryItemTable();
         UUID id = UUID.randomUUID();
-        client.insert(items).values(items.create(id, "SKU-NOWAIT", 3)).execute();
+        client.insert(items)
+                .values(items.create(id, "SKU-NOWAIT", 3))
+                .execute();
 
         try (Connection lockHolder = dataSource.getConnection()) {
             lockHolder.setAutoCommit(false);
@@ -308,20 +355,29 @@ public class PostgresIntegrationTest {
             }
 
             PostgresLockNotAvailableException thrown = expectThrows(PostgresLockNotAvailableException.class,
-                    () -> client.select(items).where(items.id().eq(id)).forUpdateNoWait().fetch());
+                    () -> client.select(items)
+                            .where(items.id().eq(id))
+                            .forUpdateNoWait()
+                            .fetch());
             assertTrue(thrown.retryable());
 
             lockHolder.commit();
         }
 
-        assertEquals(client.select(items).where(items.id().eq(id)).forUpdateNoWait().fetch().size(), 1);
+        assertEquals(client.select(items)
+                .where(items.id().eq(id))
+                .forUpdateNoWait()
+                .fetch()
+                .size(), 1);
     }
 
     @Test
     public void forShareAllowsAConcurrentSharedLockOnTheSameRow() throws SQLException {
         InventoryItemTable items = new InventoryItemTable();
         UUID id = UUID.randomUUID();
-        client.insert(items).values(items.create(id, "SKU-SHARE", 3)).execute();
+        client.insert(items)
+                .values(items.create(id, "SKU-SHARE", 3))
+                .execute();
 
         try (Connection lockHolder = dataSource.getConnection()) {
             lockHolder.setAutoCommit(false);
@@ -331,7 +387,10 @@ public class PostgresIntegrationTest {
                 statement.executeQuery();
             }
 
-            List<InventoryItem> found = client.select(items).where(items.id().eq(id)).forShare().fetch();
+            List<InventoryItem> found = client.select(items)
+                    .where(items.id().eq(id))
+                    .forShare()
+                    .fetch();
             assertEquals(found.size(), 1, "A second FOR SHARE lock must not block behind the first.");
 
             lockHolder.commit();
@@ -340,8 +399,9 @@ public class PostgresIntegrationTest {
 
     @Test
     public void transactionWithIsolationLevelActuallyAppliesItOnTheConnection() throws SQLException {
-        String isolation = client.transaction(IsolationLevel.SERIALIZABLE,
-                tx -> tx.sql("SHOW transaction_isolation").result(row -> row.getString(1)).getFirst());
+        String isolation = client.transaction(IsolationLevel.SERIALIZABLE, tx -> tx.sql("SHOW transaction_isolation")
+                .result(row -> row.getString(1))
+                .getFirst());
 
         assertEquals(isolation, "serializable");
     }
@@ -353,13 +413,18 @@ public class PostgresIntegrationTest {
 
         expectThrows(SQLException.class, () -> client.transaction(tx -> {
             tx.transactionRequiringNew(inner -> {
-                inner.insert(items).values(items.create(id, "SKU-REQUIRES-NEW", 1)).execute();
+                inner.insert(items)
+                        .values(items.create(id, "SKU-REQUIRES-NEW", 1))
+                        .execute();
                 return null;
             });
             throw new SQLException("boom");
         }));
 
-        assertEquals(client.select(items).where(items.id().eq(id)).fetch().size(), 1);
+        assertEquals(client.select(items)
+                .where(items.id().eq(id))
+                .fetch()
+                .size(), 1);
     }
 
     @Test
@@ -367,8 +432,12 @@ public class PostgresIntegrationTest {
         InventoryItemTable items = new InventoryItemTable();
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
-        client.insert(items).values(items.create(a, "SKU-DEADLOCK-A", 1)).execute();
-        client.insert(items).values(items.create(b, "SKU-DEADLOCK-B", 1)).execute();
+        client.insert(items)
+                .values(items.create(a, "SKU-DEADLOCK-A", 1))
+                .execute();
+        client.insert(items)
+                .values(items.create(b, "SKU-DEADLOCK-B", 1))
+                .execute();
 
         CountDownLatch firstLocked = new CountDownLatch(1);
         CountDownLatch secondLocked = new CountDownLatch(1);
@@ -377,10 +446,16 @@ public class PostgresIntegrationTest {
         Thread t1 = new Thread(() -> {
             try {
                 client.transaction(tx -> {
-                    tx.update(items).set(items.quantity(), 10).where(items.id().eq(a)).execute();
+                    tx.update(items)
+                            .set(items.quantity(), 10)
+                            .where(items.id().eq(a))
+                            .execute();
                     firstLocked.countDown();
                     awaitUninterruptibly(secondLocked);
-                    return tx.update(items).set(items.quantity(), 20).where(items.id().eq(b)).execute();
+                    return tx.update(items)
+                            .set(items.quantity(), 20)
+                            .where(items.id().eq(b))
+                            .execute();
                 });
             } catch (SQLException e) {
                 caught.set(e);
@@ -389,10 +464,16 @@ public class PostgresIntegrationTest {
         Thread t2 = new Thread(() -> {
             try {
                 client.transaction(tx -> {
-                    tx.update(items).set(items.quantity(), 30).where(items.id().eq(b)).execute();
+                    tx.update(items)
+                            .set(items.quantity(), 30)
+                            .where(items.id().eq(b))
+                            .execute();
                     secondLocked.countDown();
                     awaitUninterruptibly(firstLocked);
-                    return tx.update(items).set(items.quantity(), 40).where(items.id().eq(a)).execute();
+                    return tx.update(items)
+                            .set(items.quantity(), 40)
+                            .where(items.id().eq(a))
+                            .execute();
                 });
             } catch (SQLException e) {
                 caught.set(e);
@@ -414,7 +495,9 @@ public class PostgresIntegrationTest {
             throws SQLException, InterruptedException {
         InventoryItemTable items = new InventoryItemTable();
         UUID id = UUID.randomUUID();
-        client.insert(items).values(items.create(id, "SKU-RETRY", 1)).execute();
+        client.insert(items)
+                .values(items.create(id, "SKU-RETRY", 1))
+                .execute();
         AtomicInteger attempts = new AtomicInteger();
 
         try (Connection lockHolder = dataSource.getConnection()) {
@@ -436,7 +519,10 @@ public class PostgresIntegrationTest {
 
             List<InventoryItem> result = client.transactionWithRetry(10, Duration.ofMillis(100), tx -> {
                 attempts.incrementAndGet();
-                return tx.select(items).where(items.id().eq(id)).forUpdateNoWait().fetch();
+                return tx.select(items)
+                        .where(items.id().eq(id))
+                        .forUpdateNoWait()
+                        .fetch();
             });
 
             releaseAfterADelay.join();
@@ -452,20 +538,28 @@ public class PostgresIntegrationTest {
         UUID nestedId = UUID.randomUUID();
 
         client.transaction(tx -> {
-            tx.insert(items).values(items.create(outerId, "SKU-NESTED-OUTER", 1)).execute();
+            tx.insert(items)
+                    .values(items.create(outerId, "SKU-NESTED-OUTER", 1))
+                    .execute();
 
             expectThrows(RuntimeException.class, () -> tx.transactionNested(inner -> {
-                inner.insert(items).values(items.create(nestedId, "SKU-NESTED-INNER", 1)).execute();
+                inner.insert(items)
+                        .values(items.create(nestedId, "SKU-NESTED-INNER", 1))
+                        .execute();
                 throw new RuntimeException("nested failure");
             }));
 
             return null;
         });
 
-        assertEquals(client.select(items).where(items.id().eq(outerId)).fetch().size(), 1,
-                "The outer transaction's own write must survive the nested SAVEPOINT rollback.");
-        assertTrue(client.select(items).where(items.id().eq(nestedId)).fetch().isEmpty(),
-                "The nested transaction's write must be rolled back to its SAVEPOINT.");
+        assertEquals(client.select(items)
+                .where(items.id().eq(outerId))
+                .fetch()
+                .size(), 1, "The outer transaction's own write must survive the nested SAVEPOINT rollback.");
+        assertTrue(client.select(items)
+                .where(items.id().eq(nestedId))
+                .fetch()
+                .isEmpty(), "The nested transaction's write must be rolled back to its SAVEPOINT.");
     }
 
     private static void awaitUninterruptibly(CountDownLatch latch) {

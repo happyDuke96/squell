@@ -83,15 +83,29 @@ public class SqliteIntegrationTest {
         SqliteNoteTable notes = table();
         UUID id = UUID.randomUUID();
 
-        client.insert(notes).values(notes.create(id, "sqlite-real")).execute();
-        assertEquals(client.select(notes).where(notes.id().eq(id)).fetch().getFirst().note(), "sqlite-real");
+        client.insert(notes)
+                .values(notes.create(id, "sqlite-real"))
+                .execute();
+        assertEquals(client.select(notes)
+                .where(notes.id().eq(id))
+                .fetch()
+                .getFirst()
+                .note(), "sqlite-real");
 
-        int updated = client.update(notes).set(notes.note(), "sqlite-updated").where(notes.id().eq(id)).execute();
+        int updated = client.update(notes)
+                .set(notes.note(), "sqlite-updated")
+                .where(notes.id().eq(id))
+                .execute();
         assertEquals(updated, 1);
 
-        int deleted = client.delete(notes).where(notes.id().eq(id)).execute();
+        int deleted = client.delete(notes)
+                .where(notes.id().eq(id))
+                .execute();
         assertEquals(deleted, 1);
-        assertTrue(client.select(notes).where(notes.id().eq(id)).fetch().isEmpty());
+        assertTrue(client.select(notes)
+                .where(notes.id().eq(id))
+                .fetch()
+                .isEmpty());
     }
 
     @Test
@@ -99,7 +113,9 @@ public class SqliteIntegrationTest {
         SqliteNoteTable notes = table();
         UUID id = UUID.randomUUID();
 
-        SqliteNote returned = client.insert(notes).values(notes.create(id, "returning-insert")).executeAndReturn();
+        SqliteNote returned = client.insert(notes)
+                .values(notes.create(id, "returning-insert"))
+                .executeAndReturn();
 
         assertEquals(returned.note(), "returning-insert");
     }
@@ -108,9 +124,13 @@ public class SqliteIntegrationTest {
     public void updateAndReturnReturnsTheUpdatedRowOnRealSqlite() throws SQLException {
         SqliteNoteTable notes = table();
         UUID id = UUID.randomUUID();
-        client.insert(notes).values(notes.create(id, "before-update")).execute();
+        client.insert(notes)
+                .values(notes.create(id, "before-update"))
+                .execute();
 
-        List<SqliteNote> updated = client.update(notes).set(notes.note(), "after-update").where(notes.id().eq(id))
+        List<SqliteNote> updated = client.update(notes)
+                .set(notes.note(), "after-update")
+                .where(notes.id().eq(id))
                 .updateAndReturn();
 
         assertEquals(updated.size(), 1);
@@ -121,9 +141,13 @@ public class SqliteIntegrationTest {
     public void deleteAndReturnReturnsTheDeletedRowOnRealSqlite() throws SQLException {
         SqliteNoteTable notes = table();
         UUID id = UUID.randomUUID();
-        client.insert(notes).values(notes.create(id, "to-delete")).execute();
+        client.insert(notes)
+                .values(notes.create(id, "to-delete"))
+                .execute();
 
-        List<SqliteNote> deleted = client.delete(notes).where(notes.id().eq(id)).deleteAndReturn();
+        List<SqliteNote> deleted = client.delete(notes)
+                .where(notes.id().eq(id))
+                .deleteAndReturn();
 
         assertEquals(deleted.size(), 1);
         assertEquals(deleted.getFirst().note(), "to-delete");
@@ -135,10 +159,22 @@ public class SqliteIntegrationTest {
         UUID trueId = UUID.randomUUID();
         UUID falseId = UUID.randomUUID();
 
-        client.insert(flags).values(flags.create(trueId, true)).execute();
-        client.insert(flags).values(flags.create(falseId, false)).execute();
+        client.insert(flags)
+                .values(flags.create(trueId, true))
+                .execute();
+        client.insert(flags)
+                .values(flags.create(falseId, false))
+                .execute();
 
-        assertEquals(client.select(flags).where(flags.id().eq(trueId)).fetch().getFirst().enabled(), true);
-        assertEquals(client.select(flags).where(flags.id().eq(falseId)).fetch().getFirst().enabled(), false);
+        assertEquals(client.select(flags)
+                .where(flags.id().eq(trueId))
+                .fetch()
+                .getFirst()
+                .enabled(), true);
+        assertEquals(client.select(flags)
+                .where(flags.id().eq(falseId))
+                .fetch()
+                .getFirst()
+                .enabled(), false);
     }
 }

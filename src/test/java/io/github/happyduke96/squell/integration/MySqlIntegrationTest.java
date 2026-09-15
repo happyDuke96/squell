@@ -94,19 +94,34 @@ public class MySqlIntegrationTest {
         MySqlTypesTable types = table();
         UUID id = UUID.randomUUID();
 
-        client.insert(types).values(types.create(id, new float[] {1f}, Set.of("sql"))).execute();
-        assertEquals(client.select(types).where(types.id().eq(id)).fetch().getFirst().embedding(),
-                new float[] {1f});
+        client.insert(types)
+                .values(types.create(id, new float[] {1f}, Set.of("sql")))
+                .execute();
+        assertEquals(client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .getFirst()
+                .embedding(), new float[] {1f});
 
-        int updated = client.update(types).set(types.embedding(), new float[] {2f})
-                .where(types.id().eq(id)).execute();
+        int updated = client.update(types)
+                .set(types.embedding(), new float[] {2f})
+                .where(types.id().eq(id))
+                .execute();
         assertEquals(updated, 1);
-        assertEquals(client.select(types).where(types.id().eq(id)).fetch().getFirst().embedding(),
-                new float[] {2f});
+        assertEquals(client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .getFirst()
+                .embedding(), new float[] {2f});
 
-        int deleted = client.delete(types).where(types.id().eq(id)).execute();
+        int deleted = client.delete(types)
+                .where(types.id().eq(id))
+                .execute();
         assertEquals(deleted, 1);
-        assertTrue(client.select(types).where(types.id().eq(id)).fetch().isEmpty());
+        assertTrue(client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .isEmpty());
     }
 
     @Test
@@ -116,12 +131,22 @@ public class MySqlIntegrationTest {
         UUID second = UUID.randomUUID();
 
         client.transactionWithoutResult(tx -> {
-            tx.insert(types).values(types.create(first, new float[] {1f}, Set.of("sql"))).execute();
-            tx.insert(types).values(types.create(second, new float[] {2f}, Set.of("java"))).execute();
+            tx.insert(types)
+                    .values(types.create(first, new float[] {1f}, Set.of("sql")))
+                    .execute();
+            tx.insert(types)
+                    .values(types.create(second, new float[] {2f}, Set.of("java")))
+                    .execute();
         });
 
-        assertEquals(client.select(types).where(types.id().eq(first)).fetch().size(), 1);
-        assertEquals(client.select(types).where(types.id().eq(second)).fetch().size(), 1);
+        assertEquals(client.select(types)
+                .where(types.id().eq(first))
+                .fetch()
+                .size(), 1);
+        assertEquals(client.select(types)
+                .where(types.id().eq(second))
+                .fetch()
+                .size(), 1);
     }
 
     @Test
@@ -130,9 +155,14 @@ public class MySqlIntegrationTest {
         UUID id = UUID.randomUUID();
         float[] original = {1.5f, -2.25f, 3f};
 
-        client.insert(types).values(types.create(id, original, Set.of("sql"))).execute();
+        client.insert(types)
+                .values(types.create(id, original, Set.of("sql")))
+                .execute();
 
-        MySqlTypes found = client.select(types).where(types.id().eq(id)).fetch().getFirst();
+        MySqlTypes found = client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .getFirst();
 
         assertEquals(found.embedding(), original);
     }
@@ -141,7 +171,9 @@ public class MySqlIntegrationTest {
     public void forUpdateNoWaitFailsImmediatelyWithAMySqlLockNotAvailableException() throws SQLException {
         MySqlTypesTable types = table();
         UUID id = UUID.randomUUID();
-        client.insert(types).values(types.create(id, new float[] {0f}, Set.of("sql"))).execute();
+        client.insert(types)
+                .values(types.create(id, new float[] {0f}, Set.of("sql")))
+                .execute();
 
         try (Connection lockHolder = dataSource.getConnection()) {
             lockHolder.setAutoCommit(false);
@@ -152,13 +184,20 @@ public class MySqlIntegrationTest {
             }
 
             MySqlLockNotAvailableException thrown = expectThrows(MySqlLockNotAvailableException.class,
-                    () -> client.select(types).where(types.id().eq(id)).forUpdateNoWait().fetch());
+                    () -> client.select(types)
+                            .where(types.id().eq(id))
+                            .forUpdateNoWait()
+                            .fetch());
             assertTrue(thrown.retryable());
 
             lockHolder.commit();
         }
 
-        assertEquals(client.select(types).where(types.id().eq(id)).forUpdateNoWait().fetch().size(), 1);
+        assertEquals(client.select(types)
+                .where(types.id().eq(id))
+                .forUpdateNoWait()
+                .fetch()
+                .size(), 1);
     }
 
     @Test
@@ -166,8 +205,12 @@ public class MySqlIntegrationTest {
         MySqlTypesTable types = table();
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
-        client.insert(types).values(types.create(a, new float[] {0f}, Set.of("sql"))).execute();
-        client.insert(types).values(types.create(b, new float[] {0f}, Set.of("sql"))).execute();
+        client.insert(types)
+                .values(types.create(a, new float[] {0f}, Set.of("sql")))
+                .execute();
+        client.insert(types)
+                .values(types.create(b, new float[] {0f}, Set.of("sql")))
+                .execute();
 
         CountDownLatch firstLocked = new CountDownLatch(1);
         CountDownLatch secondLocked = new CountDownLatch(1);
@@ -176,10 +219,15 @@ public class MySqlIntegrationTest {
         Thread t1 = new Thread(() -> {
             try {
                 client.transaction(tx -> {
-                    tx.update(types).set(types.embedding(), new float[] {1f}).where(types.id().eq(a)).execute();
+                    tx.update(types)
+                            .set(types.embedding(), new float[] {1f})
+                            .where(types.id().eq(a))
+                            .execute();
                     firstLocked.countDown();
                     awaitUninterruptibly(secondLocked);
-                    return tx.update(types).set(types.embedding(), new float[] {2f}).where(types.id().eq(b))
+                    return tx.update(types)
+                            .set(types.embedding(), new float[] {2f})
+                            .where(types.id().eq(b))
                             .execute();
                 });
             } catch (SQLException e) {
@@ -189,10 +237,15 @@ public class MySqlIntegrationTest {
         Thread t2 = new Thread(() -> {
             try {
                 client.transaction(tx -> {
-                    tx.update(types).set(types.embedding(), new float[] {3f}).where(types.id().eq(b)).execute();
+                    tx.update(types)
+                            .set(types.embedding(), new float[] {3f})
+                            .where(types.id().eq(b))
+                            .execute();
                     secondLocked.countDown();
                     awaitUninterruptibly(firstLocked);
-                    return tx.update(types).set(types.embedding(), new float[] {4f}).where(types.id().eq(a))
+                    return tx.update(types)
+                            .set(types.embedding(), new float[] {4f})
+                            .where(types.id().eq(a))
                             .execute();
                 });
             } catch (SQLException e) {
@@ -215,7 +268,9 @@ public class MySqlIntegrationTest {
             throws SQLException, InterruptedException {
         MySqlTypesTable types = table();
         UUID id = UUID.randomUUID();
-        client.insert(types).values(types.create(id, new float[] {0f}, Set.of("sql"))).execute();
+        client.insert(types)
+                .values(types.create(id, new float[] {0f}, Set.of("sql")))
+                .execute();
         AtomicInteger attempts = new AtomicInteger();
 
         try (Connection lockHolder = dataSource.getConnection()) {
@@ -237,7 +292,10 @@ public class MySqlIntegrationTest {
 
             List<MySqlTypes> result = client.transactionWithRetry(10, Duration.ofMillis(100), tx -> {
                 attempts.incrementAndGet();
-                return tx.select(types).where(types.id().eq(id)).forUpdateNoWait().fetch();
+                return tx.select(types)
+                        .where(types.id().eq(id))
+                        .forUpdateNoWait()
+                        .fetch();
             });
 
             releaseAfterADelay.join();
@@ -261,9 +319,14 @@ public class MySqlIntegrationTest {
         UUID id = UUID.randomUUID();
         Set<String> original = new LinkedHashSet<>(List.of("java", "oop", "mysql"));
 
-        client.insert(types).values(types.create(id, new float[] {0f}, original)).execute();
+        client.insert(types)
+                .values(types.create(id, new float[] {0f}, original))
+                .execute();
 
-        MySqlTypes found = client.select(types).where(types.id().eq(id)).fetch().getFirst();
+        MySqlTypes found = client.select(types)
+                .where(types.id().eq(id))
+                .fetch()
+                .getFirst();
 
         assertEquals(found.labels(), original);
     }

@@ -33,11 +33,15 @@ public class CommentTest {
         comments = new CommentTable();
 
         UUID authorId = UUID.randomUUID();
-        client.insert(new AuthorTable()).values(new AuthorTable().create(authorId, "Ada Lovelace")).execute();
+        client.insert(new AuthorTable())
+                .values(new AuthorTable().create(authorId, "Ada Lovelace"))
+                .execute();
 
         postId = UUID.randomUUID();
         PostTable posts = new PostTable();
-        client.insert(posts).values(posts.create(postId, authorId, "Notes", Post.Status.PUBLISHED)).execute();
+        client.insert(posts)
+                .values(posts.create(postId, authorId, "Notes", Post.Status.PUBLISHED))
+                .execute();
     }
 
     @Test
@@ -58,37 +62,64 @@ public class CommentTest {
 
     @Test
     public void insertLetsTheDatabaseGenerateTheId() throws SQLException {
-        client.insert(comments).values(comments.create(postId, "tech", 5)).execute();
+        client.insert(comments)
+                .values(comments.create(postId, "tech", 5))
+                .execute();
 
-        Comment found = client.select(comments).where(comments.category().eq("tech")).fetch().getFirst();
+        Comment found = client.select(comments)
+                .where(comments.category().eq("tech"))
+                .fetch()
+                .getFirst();
 
         assertTrue(found.id().isPresent());
     }
 
     @Test
     public void incrementAddsTheDeltaToTheExistingValue() throws SQLException {
-        client.insert(comments).values(comments.create(postId, "tech", 10)).execute();
+        client.insert(comments)
+                .values(comments.create(postId, "tech", 10))
+                .execute();
 
-        client.update(comments).increment(comments.upvotes(), 5).where(comments.category().eq("tech")).execute();
+        client.update(comments)
+                .increment(comments.upvotes(), 5)
+                .where(comments.category().eq("tech"))
+                .execute();
 
-        Comment found = client.select(comments).where(comments.category().eq("tech")).fetch().getFirst();
+        Comment found = client.select(comments)
+                .where(comments.category().eq("tech"))
+                .fetch()
+                .getFirst();
         assertEquals(found.upvotes(), 15);
     }
 
     @Test
     public void incrementWithANegativeDeltaDecrements() throws SQLException {
-        client.insert(comments).values(comments.create(postId, "tech", 10)).execute();
+        client.insert(comments)
+                .values(comments.create(postId, "tech", 10))
+                .execute();
 
-        client.update(comments).increment(comments.upvotes(), -3).where(comments.category().eq("tech")).execute();
+        client.update(comments)
+                .increment(comments.upvotes(), -3)
+                .where(comments.category().eq("tech"))
+                .execute();
 
-        Comment found = client.select(comments).where(comments.category().eq("tech")).fetch().getFirst();
+        Comment found = client.select(comments)
+                .where(comments.category().eq("tech"))
+                .fetch()
+                .getFirst();
         assertEquals(found.upvotes(), 7);
     }
 
     private void insertSample() throws SQLException {
-        client.insert(comments).values(comments.create(postId, "tech", 10)).execute();
-        client.insert(comments).values(comments.create(postId, "tech", 20)).execute();
-        client.insert(comments).values(comments.create(postId, "science", 5)).execute();
+        client.insert(comments)
+                .values(comments.create(postId, "tech", 10))
+                .execute();
+        client.insert(comments)
+                .values(comments.create(postId, "tech", 20))
+                .execute();
+        client.insert(comments)
+                .values(comments.create(postId, "science", 5))
+                .execute();
     }
 
     @Test
@@ -140,17 +171,27 @@ public class CommentTest {
     public void ungroupedMinMaxSumAvgComputeAcrossAllMatchingRows() throws SQLException {
         insertSample();
 
-        assertEquals(client.select(comments).min(comments.upvotes()).orElseThrow(), Integer.valueOf(5));
-        assertEquals(client.select(comments).max(comments.upvotes()).orElseThrow(), Integer.valueOf(20));
-        assertEquals(client.select(comments).sum(comments.upvotes()).orElseThrow(), 35.0, 0.0001);
-        assertEquals(client.select(comments).avg(comments.upvotes()).orElseThrow(), 35.0 / 3.0, 0.0001);
+        assertEquals(client.select(comments)
+                .min(comments.upvotes())
+                .orElseThrow(), Integer.valueOf(5));
+        assertEquals(client.select(comments)
+                .max(comments.upvotes())
+                .orElseThrow(), Integer.valueOf(20));
+        assertEquals(client.select(comments)
+                .sum(comments.upvotes())
+                .orElseThrow(), 35.0, 0.0001);
+        assertEquals(client.select(comments)
+                .avg(comments.upvotes())
+                .orElseThrow(), 35.0 / 3.0, 0.0001);
     }
 
     @Test
     public void ungroupedAggregatesAreEmptyWhenNothingMatches() throws SQLException {
         insertSample();
 
-        assertFalse(client.select(comments).where(comments.category().eq("nonexistent")).min(comments.upvotes())
+        assertFalse(client.select(comments)
+                .where(comments.category().eq("nonexistent"))
+                .min(comments.upvotes())
                 .isPresent());
     }
 }

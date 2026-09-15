@@ -27,7 +27,8 @@ public class ConditionTest {
 
     @Test
     public void andCombinesTwoConditionsWithParensAndMergedValues() {
-        Condition built = posts.title().eq("Zero-reflection SQL").and(posts.status().eq(Post.Status.PUBLISHED));
+        Condition built = posts.title().eq("Zero-reflection SQL")
+                .and(posts.status().eq(Post.Status.PUBLISHED));
 
         assertEquals(built.sql(), "(title = ? AND status = ?)");
         assertEquals(built.values(), List.of("Zero-reflection SQL", "PUBLISHED"));
@@ -35,7 +36,8 @@ public class ConditionTest {
 
     @Test
     public void orCombinesTwoConditionsWithParensAndMergedValues() {
-        Condition built = posts.status().eq(Post.Status.DRAFT).or(posts.status().eq(Post.Status.PUBLISHED));
+        Condition built = posts.status().eq(Post.Status.DRAFT)
+                .or(posts.status().eq(Post.Status.PUBLISHED));
 
         assertEquals(built.sql(), "(status = ? OR status = ?)");
     }
@@ -155,7 +157,8 @@ public class ConditionTest {
 
     @Test
     public void eqFieldComparesTwoColumnsWithoutAnyBoundValue() {
-        Condition built = posts.id().qualifiedBy("p").eqField(posts.id().qualifiedBy("c"));
+        Condition built = posts.id().qualifiedBy("p")
+                .eqField(posts.id().qualifiedBy("c"));
 
         assertEquals(built.sql(), "p.id = c.id");
         assertEquals(built.values(), List.of());
@@ -215,7 +218,8 @@ public class ConditionTest {
 
     @Test
     public void eqIfFalseChainsThroughAndWithoutAnyNullCheck() {
-        Condition built = posts.status().eq(Post.Status.PUBLISHED).and(posts.title().eqIf(false, "unused"));
+        Condition built = posts.status().eq(Post.Status.PUBLISHED)
+                .and(posts.title().eqIf(false, "unused"));
 
         assertEquals(built.sql(), "status = ?");
     }
@@ -502,7 +506,8 @@ public class ConditionTest {
 
     @Test
     public void negateWrapsAConditionInNot() {
-        Condition built = posts.status().eq(Post.Status.DRAFT).negate();
+        Condition built = posts.status().eq(Post.Status.DRAFT)
+                .negate();
 
         assertEquals(built.sql(), "NOT (status = ?)");
         assertEquals(built.values(), List.of("DRAFT"));
@@ -568,8 +573,10 @@ public class ConditionTest {
     @Test
     public void sealedConditionsAreExhaustivelyMatchedInASwitch() {
         assertEquals(kindOf(posts.id().eq(UUID.randomUUID())), "equality");
-        assertEquals(kindOf(posts.status().eq(Post.Status.PUBLISHED).and(posts.title().eq("x"))), "combination");
-        assertEquals(kindOf(posts.status().eq(Post.Status.PUBLISHED).negate()), "negation");
+        assertEquals(kindOf(posts.status().eq(Post.Status.PUBLISHED)
+                .and(posts.title().eq("x"))), "combination");
+        assertEquals(kindOf(posts.status().eq(Post.Status.PUBLISHED)
+                .negate()), "negation");
         assertEquals(kindOf(new NoCondition()), "absent");
     }
 }
