@@ -64,7 +64,8 @@ public final class EntityProcessor extends AbstractProcessor {
                                boolean generated,
                                boolean nonNull,
                                boolean unique,
-                               boolean nonNegative) {
+                               boolean nonNegative,
+                               ExecutableElement element) {
     }
 
     private record EntityInfo(String packageName, String entityName, boolean hasNoArgConstructor) {
@@ -81,7 +82,10 @@ public final class EntityProcessor extends AbstractProcessor {
                 continue;
             }
             try {
-                processedEntities.add(writeTable((TypeElement) element));
+                EntityInfo info = writeTable((TypeElement) element);
+                if (info != null) {
+                    processedEntities.add(info);
+                }
             } catch (IOException e) {
                 error(element, "Could not write generated Table: " + e.getMessage());
             }
@@ -109,6 +113,9 @@ public final class EntityProcessor extends AbstractProcessor {
         String packageName = processingEnv.getElementUtils().getPackageOf(entityElement).getQualifiedName().toString();
 
         List<ColumnModel> columns = readColumns(entityElement);
+        if (!validate(entityElement, columns)) {
+            return null;
+        }
         boolean hasNoArgConstructor = columns.stream()
                 .filter(ColumnModel::needsConverter)
                 .allMatch(c -> c.converterClass() != null);
@@ -120,6 +127,44 @@ public final class EntityProcessor extends AbstractProcessor {
             writer.print(source);
         }
         return new EntityInfo(packageName, entityName, hasNoArgConstructor);
+    }
+
+    /// Column accessor names that collide with a zero-arg `Table`/`DefaultTable` method of a
+    /// different return type — every other method there either takes a parameter or (`id()`)
+    /// already returns `Field<ID>`, so these two are the only names that can't be generated.
+    private static final Set<String> RESERVED_COLUMN_NAMES = Set.of("name", "fields");
+
+    /// Rejects entity shapes that would compile into broken generated code: more than one
+    /// `@Id`, an `@Id` not literally named `id()` (required to override `DefaultTable#id()`),
+    /// or a column named `name()`/`fields()` (collides with the generated `Table` method).
+    private boolean validate(TypeElement entityElement, List<ColumnModel> columns) {
+        List<ColumnModel> idColumns = columns.stream().filter(ColumnModel::isId).toList();
+        if (idColumns.size() > 1) {
+            String names = idColumns.stream().map(ColumnModel::name).collect(Collectors.joining(", "));
+            for (ColumnModel id : idColumns) {
+                error(id.element(), "@Entity [" + entityElement.getSimpleName() + "] has more than one @Id "
+                        + "field (" + names + ") — squell doesn't support composite primary keys. Omit @Id "
+                        + "entirely instead: the generated Table implements plain Table<T> (no id()/byId()), "
+                        + "which is the supported way to model a join table or composite key.");
+            }
+            return false;
+        }
+        if (idColumns.size() == 1 && !idColumns.getFirst().name().equals("id")) {
+            ColumnModel id = idColumns.getFirst();
+            error(id.element(), "@Id must annotate a method named exactly `id()`, not `" + id.name()
+                    + "()` — DefaultTable<T, ID> requires it.");
+            return false;
+        }
+        for (ColumnModel column : columns) {
+            if (RESERVED_COLUMN_NAMES.contains(column.name())) {
+                error(column.element(), "A column accessor can't be named `" + column.name() + "()` — it "
+                        + "collides with the generated Table#" + column.name() + "() method. Rename the "
+                        + "accessor and add @Column(\"" + column.name() + "\") to keep the actual SQL column "
+                        + "name — e.g. `@Column(\"" + column.name() + "\") String label();`.");
+                return false;
+            }
+        }
+        return true;
     }
 
     private void writeRegistry(String packageName) throws IOException {
@@ -194,7 +239,8 @@ public final class EntityProcessor extends AbstractProcessor {
                     generated,
                     nonNull,
                     unique,
-                    nonNegative));
+                    nonNegative,
+                    method));
         }
         return columns;
     }

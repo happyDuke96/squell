@@ -6,6 +6,7 @@ import io.github.happyduke96.squell.PostTable;
 import org.testng.annotations.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.testng.Assert.assertEquals;
@@ -37,6 +38,22 @@ public class ConditionTest {
         Condition built = posts.status().eq(Post.Status.DRAFT).or(posts.status().eq(Post.Status.PUBLISHED));
 
         assertEquals(built.sql(), "(status = ? OR status = ?)");
+    }
+
+    @Test
+    public void geBuildsAParameterizedGreaterOrEqualCondition() {
+        Condition built = posts.title().ge("m");
+
+        assertEquals(built.sql(), "title >= ?");
+        assertEquals(built.values(), List.of("m"));
+    }
+
+    @Test
+    public void leBuildsAParameterizedLessOrEqualCondition() {
+        Condition built = posts.title().le("m");
+
+        assertEquals(built.sql(), "title <= ?");
+        assertEquals(built.values(), List.of("m"));
     }
 
     @Test
@@ -111,6 +128,22 @@ public class ConditionTest {
 
         assertEquals(built.sql(), "title NOT LIKE ?");
         assertEquals(built.values(), List.of("Zero%"));
+    }
+
+    @Test
+    public void ilikeLowersBothTheColumnAndTheBoundPattern() {
+        Condition built = posts.title().ilike("Zero%");
+
+        assertEquals(built.sql(), "LOWER(title) LIKE ?");
+        assertEquals(built.values(), List.of("zero%"));
+    }
+
+    @Test
+    public void notILikeLowersBothTheColumnAndTheBoundPattern() {
+        Condition built = posts.title().notILike("Zero%");
+
+        assertEquals(built.sql(), "LOWER(title) NOT LIKE ?");
+        assertEquals(built.values(), List.of("zero%"));
     }
 
     @Test
@@ -233,6 +266,36 @@ public class ConditionTest {
     }
 
     @Test
+    public void geIfIsNoConditionWhenTestIsFalse() {
+        Condition built = posts.title().geIf(false, "unused");
+
+        assertEquals(built.sql(), "");
+    }
+
+    @Test
+    public void geIfBuildsTheConditionWhenTestIsTrue() {
+        Condition built = posts.title().geIf(true, "m");
+
+        assertEquals(built.sql(), "title >= ?");
+        assertEquals(built.values(), List.of("m"));
+    }
+
+    @Test
+    public void leIfIsNoConditionWhenTestIsFalse() {
+        Condition built = posts.title().leIf(false, "unused");
+
+        assertEquals(built.sql(), "");
+    }
+
+    @Test
+    public void leIfBuildsTheConditionWhenTestIsTrue() {
+        Condition built = posts.title().leIf(true, "m");
+
+        assertEquals(built.sql(), "title <= ?");
+        assertEquals(built.values(), List.of("m"));
+    }
+
+    @Test
     public void betweenIfIsNoConditionWhenTestIsFalse() {
         Condition built = posts.title().betweenIf(false, "a", "m");
 
@@ -308,6 +371,36 @@ public class ConditionTest {
     }
 
     @Test
+    public void ilikeIfIsNoConditionWhenTestIsFalse() {
+        Condition built = posts.title().ilikeIf(false, "unused");
+
+        assertEquals(built.sql(), "");
+    }
+
+    @Test
+    public void ilikeIfBuildsTheConditionWhenTestIsTrue() {
+        Condition built = posts.title().ilikeIf(true, "Zero%");
+
+        assertEquals(built.sql(), "LOWER(title) LIKE ?");
+        assertEquals(built.values(), List.of("zero%"));
+    }
+
+    @Test
+    public void notILikeIfIsNoConditionWhenTestIsFalse() {
+        Condition built = posts.title().notILikeIf(false, "unused");
+
+        assertEquals(built.sql(), "");
+    }
+
+    @Test
+    public void notILikeIfBuildsTheConditionWhenTestIsTrue() {
+        Condition built = posts.title().notILikeIf(true, "Zero%");
+
+        assertEquals(built.sql(), "LOWER(title) NOT LIKE ?");
+        assertEquals(built.values(), List.of("zero%"));
+    }
+
+    @Test
     public void constraintsExposeGeneratedNonNullAndUniqueFlags() {
         ColumnConstraints idConstraints = posts.id().constraints();
         assertTrue(idConstraints.nonNull());
@@ -374,6 +467,32 @@ public class ConditionTest {
     }
 
     @Test
+    public void conditionBuilderAddValueSkipsBlankStringNonPositiveNumberAndEmptyMap() {
+        CommentTable comments = new CommentTable();
+        Condition built = new ConditionBuilder()
+                .add("   ", title -> posts.title().eq(title))
+                .add(0, upvotes -> comments.upvotes().eq(upvotes))
+                .add(-5, upvotes -> comments.upvotes().eq(upvotes))
+                .add(Map.of(), ignored -> posts.title().eq("unused"))
+                .buildAnd();
+
+        assertEquals(built.sql(), "");
+    }
+
+    @Test
+    public void conditionBuilderAddValuePresentForPositiveNumberNonEmptyMapAndBoolean() {
+        CommentTable comments = new CommentTable();
+        Condition built = new ConditionBuilder()
+                .add(5, upvotes -> comments.upvotes().eq(upvotes))
+                .add(Map.of("k", "v"), ignored -> posts.title().eq("has-entries"))
+                .add(Boolean.FALSE, ignored -> posts.title().eq("boolean-always-present"))
+                .buildAnd();
+
+        assertEquals(built.sql(), "((upvotes = ? AND title = ?) AND title = ?)");
+        assertEquals(built.values(), List.of(5, "has-entries", "boolean-always-present"));
+    }
+
+    @Test
     public void conditionBuilderWithNothingAddedBuildsNoCondition() {
         Condition built = new ConditionBuilder().buildAnd();
 
@@ -420,6 +539,8 @@ public class ConditionTest {
             case Ne<?> _ -> "inequality";
             case Gt<?> _ -> "greater-than";
             case Lt<?> _ -> "less-than";
+            case Ge<?> _ -> "greater-or-equal";
+            case Le<?> _ -> "less-or-equal";
             case Between<?> _ -> "range";
             case In<?> _ -> "membership";
             case NotIn<?> _ -> "non-membership";
@@ -427,6 +548,8 @@ public class ConditionTest {
             case NotInSubQuery<?> _ -> "subquery non-membership";
             case Like _ -> "pattern match";
             case NotLike _ -> "pattern non-match";
+            case ILike _ -> "case-insensitive pattern match";
+            case NotILike _ -> "case-insensitive pattern non-match";
             case EqField<?> _ -> "field equality";
             case IsNull _ -> "nullness";
             case IsNotNull _ -> "non-nullness";

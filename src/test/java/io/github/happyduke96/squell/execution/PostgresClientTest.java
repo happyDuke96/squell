@@ -1,10 +1,13 @@
 package io.github.happyduke96.squell.execution;
 
+import io.github.happyduke96.squell.Account;
+import io.github.happyduke96.squell.AccountTable;
 import io.github.happyduke96.squell.AuthorTable;
 import io.github.happyduke96.squell.Post;
 import io.github.happyduke96.squell.PostTable;
 import io.github.happyduke96.squell.TestDatabase;
 import io.github.happyduke96.squell.condition.Field;
+import io.github.happyduke96.squell.connection.IsolationLevel;
 import io.github.happyduke96.squell.condition.SubQuery;
 import io.github.happyduke96.squell.sql.Table;
 import org.testng.annotations.BeforeMethod;
@@ -103,6 +106,79 @@ public class PostgresClientTest {
         assertEquals(client.select(posts).fetch().size(), 2);
     }
 
+    private void insertNumberedPosts(int count) throws SQLException {
+        for (int i = 0; i < count; i++) {
+            client.insert(posts).values(posts.create(UUID.randomUUID(), authorId, "post-" + i, Post.Status.DRAFT))
+                    .execute();
+        }
+    }
+
+    @Test
+    public void fetchPageBundlesTheSlicedContentWithTheTotalCount() throws SQLException {
+        insertNumberedPosts(5);
+
+        Page<Post> firstPage = client.select(posts).orderBy(posts.title()).fetchPage(0, 2);
+
+        assertEquals(firstPage.content().size(), 2);
+        assertEquals(firstPage.totalElements(), 5);
+        assertEquals(firstPage.totalPages(), 3);
+        assertTrue(firstPage.hasNext());
+    }
+
+    @Test
+    public void fetchPageOnTheLastPageReportsNoNext() throws SQLException {
+        insertNumberedPosts(5);
+
+        Page<Post> lastPage = client.select(posts).orderBy(posts.title()).fetchPage(2, 2);
+
+        assertEquals(lastPage.content().size(), 1);
+        assertFalse(lastPage.hasNext());
+    }
+
+    @Test
+    public void fetchPageRejectsANonPositivePageSize() throws SQLException {
+        IllegalArgumentException thrown = expectThrows(IllegalArgumentException.class,
+                () -> client.select(posts).fetchPage(0, 0));
+
+        assertEquals(thrown.getMessage(), "pageSize must be positive, got [0].");
+    }
+
+    @Test
+    public void fetchSliceFetchesOneExtraRowToDeriveHasNextWithoutCounting() throws SQLException {
+        insertNumberedPosts(3);
+
+        Slice<Post> slice = client.select(posts).orderBy(posts.title()).fetchSlice(2);
+
+        assertEquals(slice.content().size(), 2);
+        assertTrue(slice.hasNext());
+    }
+
+    @Test
+    public void fetchSliceOnTheLastPageReportsNoNext() throws SQLException {
+        insertNumberedPosts(3);
+
+        Slice<Post> slice = client.select(posts).orderBy(posts.title()).fetchSlice(10);
+
+        assertEquals(slice.content().size(), 3);
+        assertFalse(slice.hasNext());
+    }
+
+    @Test
+    public void fetchSliceCombinesWithAKeysetWhereConditionForCursorPagination() throws SQLException {
+        insertNumberedPosts(5);
+
+        Slice<Post> firstSlice = client.select(posts).orderBy(posts.title()).fetchSlice(2);
+        String cursor = firstSlice.content().getLast().title();
+
+        Slice<Post> secondSlice = client.select(posts)
+                .where(posts.title().gt(cursor))
+                .orderBy(posts.title())
+                .fetchSlice(2);
+
+        assertEquals(secondSlice.content().size(), 2);
+        assertEquals(secondSlice.content().getFirst().title(), "post-2");
+    }
+
     @Test
     public void updateChangesOnlyTheMatchingRow() throws SQLException {
         UUID matching = UUID.randomUUID();
@@ -135,6 +211,21 @@ public class PostgresClientTest {
         Post reloaded = client.select(posts).where(posts.id().eq(id)).fetch().getFirst();
         assertEquals(reloaded.status(), Post.Status.PUBLISHED);
         assertEquals(reloaded.title(), "renamed");
+    }
+
+    @Test
+    public void setWithAnotherFieldCopiesItsValueOnTheSameRow() throws SQLException {
+        AccountTable accounts = new AccountTable();
+        UUID id = UUID.randomUUID();
+        client.insert(accounts).values(accounts.create(id, 100, 25)).execute();
+
+        client.update(accounts).set(accounts.balance(), accounts.pendingBalance())
+                .where(accounts.id().eq(id))
+                .execute();
+
+        Account reloaded = client.select(accounts).where(accounts.id().eq(id)).fetch().getFirst();
+        assertEquals(reloaded.balance(), 25);
+        assertEquals(reloaded.pendingBalance(), 25);
     }
 
     @Test
@@ -495,6 +586,153 @@ public class PostgresClientTest {
 
         assertEquals(counts.length, 2);
         assertTrue(client.select(posts).fetch().stream().allMatch(p -> p.status() == Post.Status.PUBLISHED));
+    }
+
+    @Test
+    public void forUpdateStillFetchesTheMatchingRowsInsideATransaction() throws SQLException {
+        UUID id = UUID.randomUUID();
+        client.insert(posts).values(posts.create(id, authorId, "locked-row", Post.Status.PUBLISHED)).execute();
+
+        Optional<Post> found = client.transaction(tx -> tx.select(posts)
+                .where(posts.id().eq(id))
+                .forUpdate()
+                .fetchOne());
+
+        assertEquals(found.map(Post::title), Optional.of("locked-row"));
+    }
+
+    @Test
+    public void forUpdateSkipLockedStillFetchesTheMatchingRowsInsideATransaction() throws SQLException {
+        UUID id = UUID.randomUUID();
+        client.insert(posts).values(posts.create(id, authorId, "skip-locked-row", Post.Status.PUBLISHED)).execute();
+
+        Optional<Post> found = client.transaction(tx -> tx.select(posts)
+                .where(posts.id().eq(id))
+                .forUpdateSkipLocked()
+                .fetchOne());
+
+        assertEquals(found.map(Post::title), Optional.of("skip-locked-row"));
+    }
+
+    @Test
+    public void forUpdateNoWaitStillFetchesTheMatchingRowsInsideATransaction() throws SQLException {
+        UUID id = UUID.randomUUID();
+        client.insert(posts).values(posts.create(id, authorId, "nowait-row", Post.Status.PUBLISHED)).execute();
+
+        Optional<Post> found = client.transaction(tx -> tx.select(posts)
+                .where(posts.id().eq(id))
+                .forUpdateNoWait()
+                .fetchOne());
+
+        assertEquals(found.map(Post::title), Optional.of("nowait-row"));
+    }
+
+    @Test
+    public void transactionWithIsolationLevelStillCommits() throws SQLException {
+        UUID id = UUID.randomUUID();
+
+        client.transaction(IsolationLevel.SERIALIZABLE, tx -> {
+            tx.insert(posts).values(posts.create(id, authorId, "serializable-row", Post.Status.DRAFT)).execute();
+            return null;
+        });
+
+        assertEquals(client.select(posts).where(posts.id().eq(id)).fetch().getFirst().title(), "serializable-row");
+    }
+
+    @Test
+    public void transactionWithoutResultAcceptsAnIsolationLevel() throws SQLException {
+        UUID id = UUID.randomUUID();
+
+        client.transactionWithoutResult(IsolationLevel.REPEATABLE_READ, tx ->
+                tx.insert(posts).values(posts.create(id, authorId, "repeatable-read-row", Post.Status.DRAFT))
+                        .execute());
+
+        assertEquals(client.select(posts).where(posts.id().eq(id)).fetch().getFirst().title(),
+                "repeatable-read-row");
+    }
+
+    @Test
+    public void requiredPropagationSeesUncommittedWritesFromTheOuterTransaction() throws SQLException {
+        UUID id = UUID.randomUUID();
+
+        Optional<Post> foundThroughTheNestedRequiredTransaction = client.transaction(tx -> {
+            tx.insert(posts).values(posts.create(id, authorId, "required-row", Post.Status.DRAFT)).execute();
+            return tx.transaction(inner -> inner.select(posts).where(posts.id().eq(id)).fetchOne());
+        });
+
+        assertEquals(foundThroughTheNestedRequiredTransaction.map(Post::title), Optional.of("required-row"));
+    }
+
+    @Test
+    public void requiredPropagationRollsBackWithTheOuterTransaction() throws SQLException {
+        UUID id = UUID.randomUUID();
+
+        expectThrows(SQLException.class, () -> client.transaction(tx -> {
+            tx.transaction(inner -> {
+                inner.insert(posts).values(posts.create(id, authorId, "required-rollback", Post.Status.DRAFT))
+                        .execute();
+                return null;
+            });
+            throw new SQLException("boom");
+        }));
+
+        assertTrue(client.select(posts).where(posts.id().eq(id)).fetch().isEmpty());
+    }
+
+    @Test
+    public void transactionRequiringNewCommitsIndependentlyOfTheOuterRollback() throws SQLException {
+        UUID id = UUID.randomUUID();
+
+        expectThrows(SQLException.class, () -> client.transaction(tx -> {
+            tx.transactionRequiringNew(inner -> {
+                inner.insert(posts).values(posts.create(id, authorId, "requires-new-row", Post.Status.DRAFT))
+                        .execute();
+                return null;
+            });
+            throw new SQLException("boom");
+        }));
+
+        assertEquals(client.select(posts).where(posts.id().eq(id)).fetch().getFirst().title(), "requires-new-row");
+    }
+
+    @Test
+    public void transactionNestedRollsBackOnlyItsOwnWriteOnFailure() throws SQLException {
+        UUID outerId = UUID.randomUUID();
+        UUID nestedId = UUID.randomUUID();
+
+        client.transaction(tx -> {
+            tx.insert(posts).values(posts.create(outerId, authorId, "outer-row", Post.Status.DRAFT)).execute();
+
+            expectThrows(RuntimeException.class, () -> tx.transactionNested(inner -> {
+                inner.insert(posts).values(posts.create(nestedId, authorId, "nested-row", Post.Status.DRAFT))
+                        .execute();
+                throw new RuntimeException("nested failure");
+            }));
+
+            return null;
+        });
+
+        assertEquals(client.select(posts).where(posts.id().eq(outerId)).fetch().size(), 1,
+                "The outer transaction's own write must survive the nested rollback.");
+        assertTrue(client.select(posts).where(posts.id().eq(nestedId)).fetch().isEmpty(),
+                "The nested transaction's write must be rolled back to its savepoint.");
+    }
+
+    @Test
+    public void transactionNestedWriteStillRollsBackWhenTheOuterTransactionLaterFails() throws SQLException {
+        UUID nestedId = UUID.randomUUID();
+
+        expectThrows(SQLException.class, () -> client.transaction(tx -> {
+            tx.transactionNested(inner -> {
+                inner.insert(posts).values(posts.create(nestedId, authorId, "nested-committed-row",
+                        Post.Status.DRAFT)).execute();
+                return null;
+            });
+            throw new SQLException("outer boom");
+        }));
+
+        assertTrue(client.select(posts).where(posts.id().eq(nestedId)).fetch().isEmpty(),
+                "A released savepoint isn't a real commit — it must still roll back with the outer transaction.");
     }
 
 }

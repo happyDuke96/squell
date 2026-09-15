@@ -100,6 +100,73 @@ public class DataAccessExceptionTest {
     }
 
     @Test
+    public void postgresDeadlockSqlStateTranslatesToAPostgresDeadlockException() {
+        SQLException simulated = new SQLException("deadlock detected", "40P01");
+
+        DataAccessException translated = DataAccessException.translate(simulated);
+
+        assertTrue(translated instanceof PostgresDeadlockException);
+        assertTrue(translated.retryable());
+    }
+
+    @Test
+    public void postgresLockNotAvailableSqlStateTranslatesToAPostgresLockNotAvailableException() {
+        SQLException simulated = new SQLException("lock not available", "55P03");
+
+        DataAccessException translated = DataAccessException.translate(simulated);
+
+        assertTrue(translated instanceof PostgresLockNotAvailableException);
+        assertTrue(translated.retryable());
+    }
+
+    @Test
+    public void mySqlDeadlockErrorCodeTranslatesToAMySqlDeadlockException() {
+        SQLException simulated = new SQLException("Deadlock found when trying to get lock", "40001", 1213);
+
+        DataAccessException translated = DataAccessException.translate(simulated);
+
+        assertTrue(translated instanceof MySqlDeadlockException);
+        assertTrue(translated.retryable());
+    }
+
+    @Test
+    public void mySqlLockWaitTimeoutStaysAGenericRetryableTransientException() {
+        // Same SQLSTATE "40001" as MySQL's deadlock, but a different vendor error code (1205) —
+        // must not be misclassified as a deadlock.
+        SQLException simulated = new SQLException("Lock wait timeout exceeded", "40001", 1205);
+
+        DataAccessException translated = DataAccessException.translate(simulated);
+
+        assertFalse(translated instanceof MySqlDeadlockException);
+        assertTrue(translated instanceof TransientDataAccessException);
+        assertTrue(translated.retryable());
+    }
+
+    @Test
+    public void mySqlLockNowaitErrorCodeTranslatesToAMySqlLockNotAvailableException() {
+        SQLException simulated = new SQLException(
+                "Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set.",
+                "HY000", 3572);
+
+        DataAccessException translated = DataAccessException.translate(simulated);
+
+        assertTrue(translated instanceof MySqlLockNotAvailableException);
+        assertTrue(translated.retryable());
+    }
+
+    @Test
+    public void unrelatedHy000ErrorCodeFallsBackToAPlainNonRetryableException() {
+        // "HY000" is MySQL's generic catch-all SQLSTATE — only vendor error code 3572 means
+        // ER_LOCK_NOWAIT; anything else on "HY000" must not be misclassified as a lock failure.
+        SQLException simulated = new SQLException("Some unrelated MySQL error", "HY000", 1046);
+
+        DataAccessException translated = DataAccessException.translate(simulated);
+
+        assertFalse(translated instanceof MySqlLockNotAvailableException);
+        assertFalse(translated.retryable());
+    }
+
+    @Test
     public void nullSqlStateFallsBackToAPlainNonRetryableException() {
         SQLException noState = new SQLException("Driver gave no SQLSTATE");
 

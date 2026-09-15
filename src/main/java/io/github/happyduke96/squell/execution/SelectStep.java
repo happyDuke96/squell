@@ -42,6 +42,16 @@ public interface SelectStep<T> {
 
     long count() throws SQLException;
 
+    /// Fetches this page's rows and the total row count across every page, in one call — the
+    /// common offset-pagination pattern of a `LIMIT`/`OFFSET` fetch plus a separate `count()`,
+    /// bundled so callers can't forget the total. `pageNumber` is 0-based.
+    Page<T> fetchPage(int pageNumber, int pageSize) throws SQLException;
+
+    /// Fetches up to `limit` rows without `COUNT(*)` or `OFFSET`, either of which degrades on a
+    /// large table — pair with `where(cursorField.gt(lastSeenValue))` and `orderBy(cursorField)`
+    /// for keyset pagination that stays fast at any depth.
+    Slice<T> fetchSlice(int limit) throws SQLException;
+
     <V> Optional<V> min(Field<V> field) throws SQLException;
 
     <V> Optional<V> max(Field<V> field) throws SQLException;

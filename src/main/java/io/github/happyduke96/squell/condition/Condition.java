@@ -5,9 +5,9 @@ import java.util.List;
 /// A `WHERE`/`HAVING` predicate — its SQL text plus the positional values it binds. Built via
 /// `Field`'s comparison methods (`eq`, `gt`, `like`, ...), then composed with `and`/`or`/`negate`.
 public sealed interface Condition permits
-        Eq, Ne, Gt, Lt,
+        Eq, Ne, Gt, Lt, Ge, Le,
         Between, In, NotIn,
-        Like, NotLike, InSubQuery,
+        Like, NotLike, ILike, NotILike, InSubQuery,
         NotInSubQuery, EqField, IsNull,
         IsNotNull, AggregateEq, AggregateNe,
         AggregateGt, AggregateGe, AggregateLt, AggregateLe,

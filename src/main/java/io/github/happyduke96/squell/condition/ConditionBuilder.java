@@ -3,6 +3,7 @@ package io.github.happyduke96.squell.condition;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 /// Accumulates optional filters into one `Condition` — `add(value, toCondition)` skips null/empty
@@ -23,8 +24,11 @@ public final class ConditionBuilder {
     private static boolean isPresent(Object value) {
         return switch (value) {
             case null -> false;
-            case String s -> !s.isEmpty();
+            case String s -> !s.isBlank();
             case Collection<?> c -> !c.isEmpty();
+            case Map<?, ?> m -> !m.isEmpty();
+            case Number n -> n.doubleValue() > 0;
+            case Boolean ignored -> true;
             default -> true;
         };
     }

@@ -11,5 +11,7 @@ public interface OnConflictStep<T> {
 
     T doUpdate(Field<?>... columnsToUpdate) throws SQLException;
 
+    <N extends Number> T doUpdateIncrementing(Field<N> counterField, N delta) throws SQLException;
+
     Optional<T> doNothing() throws SQLException;
 }

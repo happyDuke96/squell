@@ -13,6 +13,12 @@ public interface ReturningUpdateStep<T> extends UpdateStep<T> {
     <V> ReturningUpdateStep<T> set(Field<V> field, V value);
 
     @Override
+    <V> ReturningUpdateStep<T> set(Field<V> field, Field<V> other);
+
+    @Override
+    <N extends Number> ReturningUpdateStep<T> increment(Field<N> field, N delta);
+
+    @Override
     ReturningUpdateStep<T> where(Condition condition);
 
     @Override

@@ -19,7 +19,7 @@ import java.util.List;
 
 public final class DefaultUpdateStep<T> implements ReturningUpdateStep<T> {
 
-    private record Assignment(String columnName, Object value) {
+    private record Assignment(String columnName, String sqlExpression, List<Object> boundValues) {
     }
 
     private final Table<T> table;
@@ -42,7 +42,21 @@ public final class DefaultUpdateStep<T> implements ReturningUpdateStep<T> {
     @Override
     public <V> DefaultUpdateStep<T> set(Field<V> field, V value) {
         List<Assignment> next = new ArrayList<>(assignments);
-        next.add(new Assignment(field.name(), field.toSqlValue(value)));
+        next.add(new Assignment(field.name(), "?", List.of(field.toSqlValue(value))));
+        return new DefaultUpdateStep<>(table, source, next, condition);
+    }
+
+    @Override
+    public <V> DefaultUpdateStep<T> set(Field<V> field, Field<V> other) {
+        List<Assignment> next = new ArrayList<>(assignments);
+        next.add(new Assignment(field.name(), other.name(), List.of()));
+        return new DefaultUpdateStep<>(table, source, next, condition);
+    }
+
+    @Override
+    public <N extends Number> DefaultUpdateStep<T> increment(Field<N> field, N delta) {
+        List<Assignment> next = new ArrayList<>(assignments);
+        next.add(new Assignment(field.name(), field.name() + " + ?", List.of(field.toSqlValue(delta))));
         return new DefaultUpdateStep<>(table, source, next, condition);
     }
 
@@ -101,7 +115,7 @@ public final class DefaultUpdateStep<T> implements ReturningUpdateStep<T> {
             if (i > 0) {
                 setClause.append(", ");
             }
-            setClause.append(assignments.get(i).columnName()).append(" = ?");
+            setClause.append(assignments.get(i).columnName()).append(" = ").append(assignments.get(i).sqlExpression());
         }
         return new SqlBuilder()
                 .append("UPDATE ").append(table.name()).append(" SET ").append(setClause.toString())
@@ -112,7 +126,9 @@ public final class DefaultUpdateStep<T> implements ReturningUpdateStep<T> {
     private void bindAssignments(PreparedStatement statement) throws SQLException {
         int index = 1;
         for (Assignment assignment : assignments) {
-            statement.setObject(index++, assignment.value());
+            for (Object value : assignment.boundValues()) {
+                statement.setObject(index++, value);
+            }
         }
         for (Object value : condition.values()) {
             statement.setObject(index++, value);

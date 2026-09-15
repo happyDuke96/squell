@@ -9,9 +9,12 @@ import io.github.happyduke96.squell.sql.Table;
 import io.github.happyduke96.squell.connection.ConnectionSource;
 import io.github.happyduke96.squell.exception.DataAccessException;
 import io.github.happyduke96.squell.exception.UncheckedSqlException;
+import io.github.happyduke96.squell.execution.LockableSelectStep;
 import io.github.happyduke96.squell.execution.NoRowBound;
+import io.github.happyduke96.squell.execution.Page;
 import io.github.happyduke96.squell.execution.RowBound;
 import io.github.happyduke96.squell.execution.SelectStep;
+import io.github.happyduke96.squell.execution.Slice;
 import io.github.happyduke96.squell.execution.SomeRowBound;
 import io.github.happyduke96.squell.internal.SqlBuilder;
 
@@ -30,7 +33,7 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-public final class DefaultSelectStep<T> implements SelectStep<T> {
+public final class DefaultSelectStep<T> implements LockableSelectStep<T> {
 
     private record OrderBy(Field<?> field, boolean descending) {
     }
@@ -42,13 +45,14 @@ public final class DefaultSelectStep<T> implements SelectStep<T> {
     private final RowBound limit;
     private final RowBound offset;
     private final boolean distinct;
+    private final String lockClause;
 
     public DefaultSelectStep(Table<T> table, ConnectionSource source) {
-        this(table, source, NoCondition.INSTANCE, List.of(), NoRowBound.INSTANCE, NoRowBound.INSTANCE, false);
+        this(table, source, NoCondition.INSTANCE, List.of(), NoRowBound.INSTANCE, NoRowBound.INSTANCE, false, "");
     }
 
     private DefaultSelectStep(Table<T> table, ConnectionSource source, Condition condition, List<OrderBy> orderBy,
-            RowBound limit, RowBound offset, boolean distinct) {
+            RowBound limit, RowBound offset, boolean distinct, String lockClause) {
         this.table = table;
         this.source = source;
         this.condition = condition;
@@ -56,49 +60,72 @@ public final class DefaultSelectStep<T> implements SelectStep<T> {
         this.limit = limit;
         this.offset = offset;
         this.distinct = distinct;
+        this.lockClause = lockClause;
     }
 
     @Override
-    public SelectStep<T> where(Condition condition) {
+    public DefaultSelectStep<T> where(Condition condition) {
         return new DefaultSelectStep<>(table, source, this.condition.and(condition), orderBy, limit, offset,
-                distinct);
+                distinct, lockClause);
     }
 
     @Override
-    public SelectStep<T> orderBy(Field<?> field) {
+    public DefaultSelectStep<T> orderBy(Field<?> field) {
         List<OrderBy> next = new ArrayList<>(orderBy);
         next.add(new OrderBy(field, false));
-        return new DefaultSelectStep<>(table, source, condition, next, limit, offset, distinct);
+        return new DefaultSelectStep<>(table, source, condition, next, limit, offset, distinct, lockClause);
     }
 
     @Override
-    public SelectStep<T> orderByDesc(Field<?> field) {
+    public DefaultSelectStep<T> orderByDesc(Field<?> field) {
         List<OrderBy> next = new ArrayList<>(orderBy);
         next.add(new OrderBy(field, true));
-        return new DefaultSelectStep<>(table, source, condition, next, limit, offset, distinct);
+        return new DefaultSelectStep<>(table, source, condition, next, limit, offset, distinct, lockClause);
     }
 
     @Override
-    public SelectStep<T> limit(int limit) {
+    public DefaultSelectStep<T> limit(int limit) {
         if (limit < 0) {
             throw new IllegalArgumentException("limit must not be negative, got [" + limit + "].");
         }
         return new DefaultSelectStep<>(table, source, condition, orderBy, new SomeRowBound("LIMIT", limit), offset,
-                distinct);
+                distinct, lockClause);
     }
 
     @Override
-    public SelectStep<T> offset(int offset) {
+    public DefaultSelectStep<T> offset(int offset) {
         if (offset < 0) {
             throw new IllegalArgumentException("offset must not be negative, got [" + offset + "].");
         }
         return new DefaultSelectStep<>(table, source, condition, orderBy, limit, new SomeRowBound("OFFSET", offset),
-                distinct);
+                distinct, lockClause);
     }
 
     @Override
-    public SelectStep<T> distinct() {
-        return new DefaultSelectStep<>(table, source, condition, orderBy, limit, offset, true);
+    public DefaultSelectStep<T> distinct() {
+        return new DefaultSelectStep<>(table, source, condition, orderBy, limit, offset, true, lockClause);
+    }
+
+    @Override
+    public SelectStep<T> forUpdate() {
+        return new DefaultSelectStep<>(table, source, condition, orderBy, limit, offset, distinct, "FOR UPDATE");
+    }
+
+    @Override
+    public SelectStep<T> forUpdateSkipLocked() {
+        return new DefaultSelectStep<>(table, source, condition, orderBy, limit, offset, distinct,
+                "FOR UPDATE SKIP LOCKED");
+    }
+
+    @Override
+    public SelectStep<T> forUpdateNoWait() {
+        return new DefaultSelectStep<>(table, source, condition, orderBy, limit, offset, distinct,
+                "FOR UPDATE NOWAIT");
+    }
+
+    @Override
+    public SelectStep<T> forShare() {
+        return new DefaultSelectStep<>(table, source, condition, orderBy, limit, offset, distinct, "FOR SHARE");
     }
 
     @Override
@@ -151,6 +178,7 @@ public final class DefaultSelectStep<T> implements SelectStep<T> {
                 .clause("ORDER BY", orderByContent())
                 .append(limit.sql())
                 .append(offset.sql())
+                .appendIf(!lockClause.isEmpty(), " " + lockClause)
                 .toString();
     }
 
@@ -224,6 +252,7 @@ public final class DefaultSelectStep<T> implements SelectStep<T> {
                 .clause("ORDER BY", orderByContent())
                 .append(limit.sql())
                 .append(offset.sql())
+                .appendIf(!lockClause.isEmpty(), " " + lockClause)
                 .toString();
         Connection connection = source.acquire();
         try {
@@ -266,6 +295,28 @@ public final class DefaultSelectStep<T> implements SelectStep<T> {
         } finally {
             source.release(connection);
         }
+    }
+
+    @Override
+    public Page<T> fetchPage(int pageNumber, int pageSize) throws SQLException {
+        if (pageNumber < 0) {
+            throw new IllegalArgumentException("pageNumber must not be negative, got [" + pageNumber + "].");
+        }
+        if (pageSize <= 0) {
+            throw new IllegalArgumentException("pageSize must be positive, got [" + pageSize + "].");
+        }
+        List<T> content = limit(pageSize).offset(pageNumber * pageSize).fetch();
+        return new Page<>(content, count(), pageNumber, pageSize);
+    }
+
+    @Override
+    public Slice<T> fetchSlice(int limit) throws SQLException {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be positive, got [" + limit + "].");
+        }
+        List<T> fetched = limit(limit + 1).fetch();
+        boolean hasNext = fetched.size() > limit;
+        return new Slice<>(hasNext ? fetched.subList(0, limit) : fetched, hasNext);
     }
 
     @Override

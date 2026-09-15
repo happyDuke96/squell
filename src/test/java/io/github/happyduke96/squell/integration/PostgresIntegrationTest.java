@@ -5,6 +5,9 @@ import io.github.happyduke96.squell.converter.postgres.IntRangeConverter;
 import io.github.happyduke96.squell.converter.postgres.JsonbConverter;
 import io.github.happyduke96.squell.converter.postgres.Range;
 import io.github.happyduke96.squell.converter.postgres.TextArrayConverter;
+import io.github.happyduke96.squell.connection.IsolationLevel;
+import io.github.happyduke96.squell.exception.PostgresDeadlockException;
+import io.github.happyduke96.squell.exception.PostgresLockNotAvailableException;
 import io.github.happyduke96.squell.execution.PostgresClient;
 import io.github.happyduke96.squell.internal.DialectVerifier;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -15,12 +18,16 @@ import org.testng.annotations.Test;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -239,5 +246,234 @@ public class PostgresIntegrationTest {
         PostgresTypes found = client.select(types).where(types.id().eq(id)).fetch().getFirst();
 
         assertEquals(found.range(), new Range<>(5, 15));
+    }
+
+    @Test
+    public void doUpdateIncrementingAtomicallyBumpsTheCounterOnConflict() throws SQLException {
+        InventoryItemTable items = new InventoryItemTable();
+        UUID originalId = UUID.randomUUID();
+        client.insert(items).values(items.create(originalId, "SKU-COUNTER", 1)).execute();
+
+        InventoryItem attempted = items.create(UUID.randomUUID(), "SKU-COUNTER", 99);
+        InventoryItem result = client.insert(items).values(attempted)
+                .onConflict(items.sku())
+                .doUpdateIncrementing(items.quantity(), 1);
+
+        assertEquals(result.quantity(), 2);
+        assertEquals(result.id(), originalId, "The original row's id must survive an upsert.");
+    }
+
+    @Test
+    public void forUpdateSkipLockedExcludesARowLockedByAnotherRealTransaction() throws SQLException {
+        InventoryItemTable items = new InventoryItemTable();
+        UUID id = UUID.randomUUID();
+        client.insert(items).values(items.create(id, "SKU-LOCKED", 3)).execute();
+
+        try (Connection lockHolder = dataSource.getConnection()) {
+            lockHolder.setAutoCommit(false);
+            try (PreparedStatement statement = lockHolder.prepareStatement(
+                    "SELECT * FROM inventory WHERE id = ? FOR UPDATE")) {
+                statement.setObject(1, id);
+                statement.executeQuery();
+            }
+
+            List<InventoryItem> whileLocked = client.select(items)
+                    .where(items.id().eq(id))
+                    .forUpdateSkipLocked()
+                    .fetch();
+            assertTrue(whileLocked.isEmpty());
+
+            lockHolder.commit();
+        }
+
+        List<InventoryItem> afterRelease = client.select(items)
+                .where(items.id().eq(id))
+                .forUpdateSkipLocked()
+                .fetch();
+        assertEquals(afterRelease.size(), 1);
+    }
+
+    @Test
+    public void forUpdateNoWaitFailsImmediatelyInsteadOfBlockingOnALockedRow() throws SQLException {
+        InventoryItemTable items = new InventoryItemTable();
+        UUID id = UUID.randomUUID();
+        client.insert(items).values(items.create(id, "SKU-NOWAIT", 3)).execute();
+
+        try (Connection lockHolder = dataSource.getConnection()) {
+            lockHolder.setAutoCommit(false);
+            try (PreparedStatement statement = lockHolder.prepareStatement(
+                    "SELECT * FROM inventory WHERE id = ? FOR UPDATE")) {
+                statement.setObject(1, id);
+                statement.executeQuery();
+            }
+
+            PostgresLockNotAvailableException thrown = expectThrows(PostgresLockNotAvailableException.class,
+                    () -> client.select(items).where(items.id().eq(id)).forUpdateNoWait().fetch());
+            assertTrue(thrown.retryable());
+
+            lockHolder.commit();
+        }
+
+        assertEquals(client.select(items).where(items.id().eq(id)).forUpdateNoWait().fetch().size(), 1);
+    }
+
+    @Test
+    public void forShareAllowsAConcurrentSharedLockOnTheSameRow() throws SQLException {
+        InventoryItemTable items = new InventoryItemTable();
+        UUID id = UUID.randomUUID();
+        client.insert(items).values(items.create(id, "SKU-SHARE", 3)).execute();
+
+        try (Connection lockHolder = dataSource.getConnection()) {
+            lockHolder.setAutoCommit(false);
+            try (PreparedStatement statement = lockHolder.prepareStatement(
+                    "SELECT * FROM inventory WHERE id = ? FOR SHARE")) {
+                statement.setObject(1, id);
+                statement.executeQuery();
+            }
+
+            List<InventoryItem> found = client.select(items).where(items.id().eq(id)).forShare().fetch();
+            assertEquals(found.size(), 1, "A second FOR SHARE lock must not block behind the first.");
+
+            lockHolder.commit();
+        }
+    }
+
+    @Test
+    public void transactionWithIsolationLevelActuallyAppliesItOnTheConnection() throws SQLException {
+        String isolation = client.transaction(IsolationLevel.SERIALIZABLE,
+                tx -> tx.sql("SHOW transaction_isolation").result(row -> row.getString(1)).getFirst());
+
+        assertEquals(isolation, "serializable");
+    }
+
+    @Test
+    public void transactionRequiringNewCommitsIndependentlyOfTheOuterRollback() throws SQLException {
+        InventoryItemTable items = new InventoryItemTable();
+        UUID id = UUID.randomUUID();
+
+        expectThrows(SQLException.class, () -> client.transaction(tx -> {
+            tx.transactionRequiringNew(inner -> {
+                inner.insert(items).values(items.create(id, "SKU-REQUIRES-NEW", 1)).execute();
+                return null;
+            });
+            throw new SQLException("boom");
+        }));
+
+        assertEquals(client.select(items).where(items.id().eq(id)).fetch().size(), 1);
+    }
+
+    @Test
+    public void aRealDeadlockBetweenTwoSquellTransactionsThrowsAPostgresDeadlockException() throws Exception {
+        InventoryItemTable items = new InventoryItemTable();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        client.insert(items).values(items.create(a, "SKU-DEADLOCK-A", 1)).execute();
+        client.insert(items).values(items.create(b, "SKU-DEADLOCK-B", 1)).execute();
+
+        CountDownLatch firstLocked = new CountDownLatch(1);
+        CountDownLatch secondLocked = new CountDownLatch(1);
+        AtomicReference<SQLException> caught = new AtomicReference<>();
+
+        Thread t1 = new Thread(() -> {
+            try {
+                client.transaction(tx -> {
+                    tx.update(items).set(items.quantity(), 10).where(items.id().eq(a)).execute();
+                    firstLocked.countDown();
+                    awaitUninterruptibly(secondLocked);
+                    return tx.update(items).set(items.quantity(), 20).where(items.id().eq(b)).execute();
+                });
+            } catch (SQLException e) {
+                caught.set(e);
+            }
+        });
+        Thread t2 = new Thread(() -> {
+            try {
+                client.transaction(tx -> {
+                    tx.update(items).set(items.quantity(), 30).where(items.id().eq(b)).execute();
+                    secondLocked.countDown();
+                    awaitUninterruptibly(firstLocked);
+                    return tx.update(items).set(items.quantity(), 40).where(items.id().eq(a)).execute();
+                });
+            } catch (SQLException e) {
+                caught.set(e);
+            }
+        });
+
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+
+        assertTrue(caught.get() instanceof PostgresDeadlockException,
+                "One of the two transactions must lose the deadlock: " + caught.get());
+        assertTrue(((PostgresDeadlockException) caught.get()).retryable());
+    }
+
+    @Test
+    public void transactionWithRetryRetriesAPostgresLockNotAvailableExceptionUntilTheLockClears()
+            throws SQLException, InterruptedException {
+        InventoryItemTable items = new InventoryItemTable();
+        UUID id = UUID.randomUUID();
+        client.insert(items).values(items.create(id, "SKU-RETRY", 1)).execute();
+        AtomicInteger attempts = new AtomicInteger();
+
+        try (Connection lockHolder = dataSource.getConnection()) {
+            lockHolder.setAutoCommit(false);
+            try (PreparedStatement statement = lockHolder.prepareStatement(
+                    "SELECT * FROM inventory WHERE id = ? FOR UPDATE")) {
+                statement.setObject(1, id);
+                statement.executeQuery();
+            }
+
+            Thread releaseAfterADelay = new Thread(() -> {
+                try {
+                    Thread.sleep(300);
+                    lockHolder.commit();
+                } catch (SQLException | InterruptedException ignored) {
+                }
+            });
+            releaseAfterADelay.start();
+
+            List<InventoryItem> result = client.transactionWithRetry(10, Duration.ofMillis(100), tx -> {
+                attempts.incrementAndGet();
+                return tx.select(items).where(items.id().eq(id)).forUpdateNoWait().fetch();
+            });
+
+            releaseAfterADelay.join();
+            assertEquals(result.size(), 1);
+            assertTrue(attempts.get() > 1, "Expected at least one retry before the lock was released.");
+        }
+    }
+
+    @Test
+    public void transactionNestedRollsBackOnlyItsOwnWriteViaARealSavepoint() throws SQLException {
+        InventoryItemTable items = new InventoryItemTable();
+        UUID outerId = UUID.randomUUID();
+        UUID nestedId = UUID.randomUUID();
+
+        client.transaction(tx -> {
+            tx.insert(items).values(items.create(outerId, "SKU-NESTED-OUTER", 1)).execute();
+
+            expectThrows(RuntimeException.class, () -> tx.transactionNested(inner -> {
+                inner.insert(items).values(items.create(nestedId, "SKU-NESTED-INNER", 1)).execute();
+                throw new RuntimeException("nested failure");
+            }));
+
+            return null;
+        });
+
+        assertEquals(client.select(items).where(items.id().eq(outerId)).fetch().size(), 1,
+                "The outer transaction's own write must survive the nested SAVEPOINT rollback.");
+        assertTrue(client.select(items).where(items.id().eq(nestedId)).fetch().isEmpty(),
+                "The nested transaction's write must be rolled back to its SAVEPOINT.");
+    }
+
+    private static void awaitUninterruptibly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
     }
 }

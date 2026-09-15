@@ -65,6 +65,26 @@ public class CommentTest {
         assertTrue(found.id().isPresent());
     }
 
+    @Test
+    public void incrementAddsTheDeltaToTheExistingValue() throws SQLException {
+        client.insert(comments).values(comments.create(postId, "tech", 10)).execute();
+
+        client.update(comments).increment(comments.upvotes(), 5).where(comments.category().eq("tech")).execute();
+
+        Comment found = client.select(comments).where(comments.category().eq("tech")).fetch().getFirst();
+        assertEquals(found.upvotes(), 15);
+    }
+
+    @Test
+    public void incrementWithANegativeDeltaDecrements() throws SQLException {
+        client.insert(comments).values(comments.create(postId, "tech", 10)).execute();
+
+        client.update(comments).increment(comments.upvotes(), -3).where(comments.category().eq("tech")).execute();
+
+        Comment found = client.select(comments).where(comments.category().eq("tech")).fetch().getFirst();
+        assertEquals(found.upvotes(), 7);
+    }
+
     private void insertSample() throws SQLException {
         client.insert(comments).values(comments.create(postId, "tech", 10)).execute();
         client.insert(comments).values(comments.create(postId, "tech", 20)).execute();

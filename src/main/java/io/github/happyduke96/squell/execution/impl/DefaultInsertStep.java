@@ -91,18 +91,22 @@ public final class DefaultInsertStep<T> implements ReturningInsertStep<T> {
                     .toString();
         }
 
-        private void bindInsertable(PreparedStatement statement) throws SQLException {
+        private int bindInsertable(PreparedStatement statement) throws SQLException {
             List<Object> values = table.insertableValues(entity);
             for (int i = 0; i < values.size(); i++) {
                 statement.setObject(i + 1, values.get(i));
             }
+            return values.size() + 1;
         }
 
-        private T runReturningOne(String sql) throws SQLException {
+        private T runReturningOne(String sql, Object... extraParams) throws SQLException {
             Connection connection = source.acquire();
             try {
                 try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                    bindInsertable(statement);
+                    int index = bindInsertable(statement);
+                    for (Object param : extraParams) {
+                        statement.setObject(index++, param);
+                    }
                     try (ResultSet rows = statement.executeQuery()) {
                         rows.next();
                         return table.fromRow(rows);
@@ -172,6 +176,18 @@ public final class DefaultInsertStep<T> implements ReturningInsertStep<T> {
                         .append(" RETURNING *")
                         .toString();
                 return runReturningOne(sql);
+            }
+
+            @Override
+            public <N extends Number> T doUpdateIncrementing(Field<N> counterField, N delta) throws SQLException {
+                String sql = new SqlBuilder()
+                        .append(insertQuery())
+                        .append(" ON CONFLICT (").append(conflictColumnsClause()).append(") DO UPDATE SET ")
+                        .append(counterField.name()).append(" = ").append(table.name()).append(".")
+                        .append(counterField.name()).append(" + ?")
+                        .append(" RETURNING *")
+                        .toString();
+                return runReturningOne(sql, counterField.toSqlValue(delta));
             }
 
             @Override

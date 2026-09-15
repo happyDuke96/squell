@@ -87,6 +87,18 @@ public final class LoggedSelectStep<T> implements SelectStep<T> {
     }
 
     @Override
+    public Page<T> fetchPage(int pageNumber, int pageSize) throws SQLException {
+        LOGGER.log(level, "Fetching through a decorated select step");
+        return origin.fetchPage(pageNumber, pageSize);
+    }
+
+    @Override
+    public Slice<T> fetchSlice(int limit) throws SQLException {
+        LOGGER.log(level, "Fetching through a decorated select step");
+        return origin.fetchSlice(limit);
+    }
+
+    @Override
     public <V> Optional<V> min(Field<V> field) throws SQLException {
         LOGGER.log(level, "Aggregating through a decorated select step");
         return origin.min(field);

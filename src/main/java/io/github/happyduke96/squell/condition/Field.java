@@ -75,6 +75,14 @@ public final class Field<T> {
         return new Lt<>(this, value);
     }
 
+    public Condition ge(T value) {
+        return new Ge<>(this, value);
+    }
+
+    public Condition le(T value) {
+        return new Le<>(this, value);
+    }
+
     public Condition between(T low, T high) {
         return new Between<>(this, low, high);
     }
@@ -101,6 +109,14 @@ public final class Field<T> {
 
     public Condition notLike(String pattern) {
         return new NotLike(this, pattern);
+    }
+
+    public Condition ilike(String pattern) {
+        return new ILike(this, pattern);
+    }
+
+    public Condition notILike(String pattern) {
+        return new NotILike(this, pattern);
     }
 
     public Condition eqField(Field<T> other) {
@@ -133,6 +149,14 @@ public final class Field<T> {
         return test ? lt(value) : NoCondition.INSTANCE;
     }
 
+    public Condition geIf(boolean test, T value) {
+        return test ? ge(value) : NoCondition.INSTANCE;
+    }
+
+    public Condition leIf(boolean test, T value) {
+        return test ? le(value) : NoCondition.INSTANCE;
+    }
+
     public Condition betweenIf(boolean test, T low, T high) {
         return test ? between(low, high) : NoCondition.INSTANCE;
     }
@@ -153,7 +177,15 @@ public final class Field<T> {
         return test ? notLike(pattern) : NoCondition.INSTANCE;
     }
 
-    /// Escapes `%`, `_`, and `\` in `literal` so it matches literally in `like`/`notLike`.
+    public Condition ilikeIf(boolean test, String pattern) {
+        return test ? ilike(pattern) : NoCondition.INSTANCE;
+    }
+
+    public Condition notILikeIf(boolean test, String pattern) {
+        return test ? notILike(pattern) : NoCondition.INSTANCE;
+    }
+
+    /// Escapes `%`, `_`, and `\` in `literal` so it matches literally in `like`/`notLike`/`ilike`.
     public static String escapeLike(String literal) {
         return literal.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }

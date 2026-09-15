@@ -5,16 +5,17 @@ import io.github.happyduke96.squell.sql.AliasedTable;
 import io.github.happyduke96.squell.sql.Table;
 
 import io.github.happyduke96.squell.connection.ConnectionSource;
+import io.github.happyduke96.squell.connection.IsolationLevel;
 import io.github.happyduke96.squell.connection.PerCallConnection;
 import io.github.happyduke96.squell.connection.SharedConnection;
 import io.github.happyduke96.squell.connection.TransactionWork;
 import io.github.happyduke96.squell.exception.DataAccessException;
 import io.github.happyduke96.squell.execution.JoinStep;
+import io.github.happyduke96.squell.execution.LockableSelectStep;
 import io.github.happyduke96.squell.execution.RawStep;
 import io.github.happyduke96.squell.execution.ReturningDeleteStep;
 import io.github.happyduke96.squell.execution.ReturningInsertStep;
 import io.github.happyduke96.squell.execution.ReturningUpdateStep;
-import io.github.happyduke96.squell.execution.SelectStep;
 import io.github.happyduke96.squell.internal.SqlBuilder;
 import org.intellij.lang.annotations.Language;
 
@@ -24,6 +25,8 @@ import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Savepoint;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -41,7 +44,7 @@ public final class DefaultClient {
         this.dataSource = dataSource;
     }
 
-    public <T> SelectStep<T> select(Table<T> table) {
+    public <T> LockableSelectStep<T> select(Table<T> table) {
         return new DefaultSelectStep<>(table, new PerCallConnection(dataSource));
     }
 
@@ -224,10 +227,60 @@ public final class DefaultClient {
     }
 
     public <R> R transaction(TransactionWork<Transaction, R> work) throws SQLException {
+        return runTransaction(dataSource, null, work);
+    }
+
+    public <R> R transaction(IsolationLevel isolationLevel, TransactionWork<Transaction, R> work)
+            throws SQLException {
+        return runTransaction(dataSource, isolationLevel, work);
+    }
+
+    /// Retries `work` in a fresh `transaction(...)` while it fails with a retryable
+    /// `DataAccessException` (a deadlock, a `forUpdateNoWait()` conflict, a serialization
+    /// failure...), up to `maxAttempts` attempts, waiting `delayBetweenAttempts` between them.
+    public <R> R transactionWithRetry(int maxAttempts, Duration delayBetweenAttempts,
+            TransactionWork<Transaction, R> work) throws SQLException {
+        return transactionWithRetry(maxAttempts, delayBetweenAttempts, null, work);
+    }
+
+    public <R> R transactionWithRetry(int maxAttempts, Duration delayBetweenAttempts, IsolationLevel isolationLevel,
+            TransactionWork<Transaction, R> work) throws SQLException {
+        if (maxAttempts < 1) {
+            throw new IllegalArgumentException("maxAttempts must be at least 1, got [" + maxAttempts + "].");
+        }
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return runTransaction(dataSource, isolationLevel, work);
+            } catch (DataAccessException e) {
+                if (!e.retryable() || attempt >= maxAttempts) {
+                    throw e;
+                }
+                sleep(delayBetweenAttempts);
+            }
+        }
+    }
+
+    private static void sleep(Duration duration) throws SQLException {
+        if (duration.isZero() || duration.isNegative()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new SQLException("Interrupted while waiting to retry a transaction.", e);
+        }
+    }
+
+    private static <R> R runTransaction(DataSource dataSource, IsolationLevel isolationLevel,
+            TransactionWork<Transaction, R> work) throws SQLException {
         try (Connection connection = dataSource.getConnection()) {
+            if (isolationLevel != null) {
+                connection.setTransactionIsolation(isolationLevel.jdbcLevel());
+            }
             connection.setAutoCommit(false);
             try {
-                R result = work.run(new Transaction(connection));
+                R result = work.run(new Transaction(connection, dataSource));
                 connection.commit();
                 return result;
             } catch (SQLException | RuntimeException e) {
@@ -250,14 +303,24 @@ public final class DefaultClient {
         }
     }
 
+    private static void rollbackToSavepointQuietly(Connection connection, Savepoint savepoint, Throwable cause) {
+        try {
+            connection.rollback(savepoint);
+        } catch (SQLException rollbackFailure) {
+            cause.addSuppressed(rollbackFailure);
+        }
+    }
+
     public static final class Transaction {
         private final ConnectionSource source;
+        private final DataSource dataSource;
 
-        private Transaction(Connection connection) {
+        private Transaction(Connection connection, DataSource dataSource) {
             this.source = new SharedConnection(connection);
+            this.dataSource = dataSource;
         }
 
-        public <T> SelectStep<T> select(Table<T> table) {
+        public <T> LockableSelectStep<T> select(Table<T> table) {
             return new DefaultSelectStep<>(table, source);
         }
 
@@ -279,6 +342,43 @@ public final class DefaultClient {
 
         public RawStep sql(@Language("SQL") String sql, Object... params) {
             return new RawStep(sql, params, source);
+        }
+
+        /// REQUIRED — runs `work` against this same connection; the enclosing `transaction(...)`
+        /// call still owns the commit/rollback boundary.
+        public <R> R transaction(TransactionWork<Transaction, R> work) throws SQLException {
+            return work.run(this);
+        }
+
+        /// REQUIRES_NEW — runs `work` in its own transaction on a separate connection, committed
+        /// or rolled back independently of this one.
+        public <R> R transactionRequiringNew(TransactionWork<Transaction, R> work) throws SQLException {
+            return runTransaction(dataSource, null, work);
+        }
+
+        /// NESTED — runs `work` inside a `SAVEPOINT` on this same connection: its writes roll
+        /// back on failure without unwinding the enclosing transaction.
+        public <R> R transactionNested(TransactionWork<Transaction, R> work) throws SQLException {
+            Connection connection = source.acquire();
+            Savepoint savepoint = connection.setSavepoint();
+            try {
+                R result = work.run(this);
+                connection.releaseSavepoint(savepoint);
+                return result;
+            } catch (SQLException | RuntimeException e) {
+                rollbackToSavepointQuietly(connection, savepoint, e);
+                throw e;
+            } catch (Error e) {
+                rollbackToSavepointQuietly(connection, savepoint, e);
+                throw e;
+            } finally {
+                source.release(connection);
+            }
+        }
+
+        public <R> R transactionRequiringNew(IsolationLevel isolationLevel, TransactionWork<Transaction, R> work)
+                throws SQLException {
+            return runTransaction(dataSource, isolationLevel, work);
         }
     }
 }

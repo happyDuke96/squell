@@ -10,6 +10,10 @@ public interface UpdateStep<T> {
 
     <V> UpdateStep<T> set(Field<V> field, V value);
 
+    <V> UpdateStep<T> set(Field<V> field, Field<V> other);
+
+    <N extends Number> UpdateStep<T> increment(Field<N> field, N delta);
+
     UpdateStep<T> where(Condition condition);
 
     default UpdateStep<T> whereIf(boolean test, Supplier<Condition> condition) {
