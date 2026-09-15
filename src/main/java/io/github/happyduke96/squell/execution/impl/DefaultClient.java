@@ -8,6 +8,7 @@ import io.github.happyduke96.squell.connection.ConnectionSource;
 import io.github.happyduke96.squell.connection.IsolationLevel;
 import io.github.happyduke96.squell.connection.PerCallConnection;
 import io.github.happyduke96.squell.connection.SharedConnection;
+import io.github.happyduke96.squell.connection.TransactionAction;
 import io.github.happyduke96.squell.connection.TransactionWork;
 import io.github.happyduke96.squell.exception.DataAccessException;
 import io.github.happyduke96.squell.execution.JoinStep;
@@ -350,10 +351,32 @@ public final class DefaultClient {
             return work.run(this);
         }
 
+        public void transactionWithoutResult(TransactionAction<Transaction> action) throws SQLException {
+            transaction(tx -> {
+                action.run(tx);
+                return null;
+            });
+        }
+
         /// REQUIRES_NEW — runs `work` in its own transaction on a separate connection, committed
         /// or rolled back independently of this one.
         public <R> R transactionRequiringNew(TransactionWork<Transaction, R> work) throws SQLException {
             return runTransaction(dataSource, null, work);
+        }
+
+        public void transactionWithoutResultRequiringNew(TransactionAction<Transaction> action) throws SQLException {
+            transactionRequiringNew(tx -> {
+                action.run(tx);
+                return null;
+            });
+        }
+
+        public void transactionWithoutResultRequiringNew(IsolationLevel isolationLevel,
+                TransactionAction<Transaction> action) throws SQLException {
+            transactionRequiringNew(isolationLevel, tx -> {
+                action.run(tx);
+                return null;
+            });
         }
 
         /// NESTED — runs `work` inside a `SAVEPOINT` on this same connection: its writes roll
@@ -374,6 +397,13 @@ public final class DefaultClient {
             } finally {
                 source.release(connection);
             }
+        }
+
+        public void transactionWithoutResultNested(TransactionAction<Transaction> action) throws SQLException {
+            transactionNested(tx -> {
+                action.run(tx);
+                return null;
+            });
         }
 
         public <R> R transactionRequiringNew(IsolationLevel isolationLevel, TransactionWork<Transaction, R> work)

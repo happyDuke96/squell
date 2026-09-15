@@ -125,6 +125,13 @@ public final class MySqlClient {
             return delegate.transaction(defaultTx -> work.run(new Transaction(defaultTx)));
         }
 
+        public void transactionWithoutResult(TransactionAction<Transaction> action) throws SQLException {
+            transaction(tx -> {
+                action.run(tx);
+                return null;
+            });
+        }
+
         /// REQUIRES_NEW — runs `work` in its own transaction on a separate connection, committed
         /// or rolled back independently of this one.
         public <R> R transactionRequiringNew(TransactionWork<Transaction, R> work) throws SQLException {
@@ -136,10 +143,32 @@ public final class MySqlClient {
             return delegate.transactionRequiringNew(isolationLevel, defaultTx -> work.run(new Transaction(defaultTx)));
         }
 
+        public void transactionWithoutResultRequiringNew(TransactionAction<Transaction> action) throws SQLException {
+            transactionRequiringNew(tx -> {
+                action.run(tx);
+                return null;
+            });
+        }
+
+        public void transactionWithoutResultRequiringNew(IsolationLevel isolationLevel,
+                TransactionAction<Transaction> action) throws SQLException {
+            transactionRequiringNew(isolationLevel, tx -> {
+                action.run(tx);
+                return null;
+            });
+        }
+
         /// NESTED — runs `work` inside a `SAVEPOINT` on this same transaction: its writes roll
         /// back on failure without unwinding the enclosing transaction.
         public <R> R transactionNested(TransactionWork<Transaction, R> work) throws SQLException {
             return delegate.transactionNested(defaultTx -> work.run(new Transaction(defaultTx)));
+        }
+
+        public void transactionWithoutResultNested(TransactionAction<Transaction> action) throws SQLException {
+            transactionNested(tx -> {
+                action.run(tx);
+                return null;
+            });
         }
 
         public <T> LockableSelectStep<T> select(Table<T> table) {
