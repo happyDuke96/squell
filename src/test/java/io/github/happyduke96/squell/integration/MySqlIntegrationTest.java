@@ -1,7 +1,13 @@
 package io.github.happyduke96.squell.integration;
 
 import com.mysql.cj.jdbc.MysqlDataSource;
+import io.github.happyduke96.squell.converter.InstantConverter;
+import io.github.happyduke96.squell.converter.LocalDateConverter;
+import io.github.happyduke96.squell.converter.LocalDateTimeConverter;
+import io.github.happyduke96.squell.converter.LocalTimeConverter;
+import io.github.happyduke96.squell.converter.OffsetDateTimeConverter;
 import io.github.happyduke96.squell.converter.UuidConverter;
+import io.github.happyduke96.squell.converter.ZonedDateTimeConverter;
 import io.github.happyduke96.squell.converter.mysql.SetConverter;
 import io.github.happyduke96.squell.converter.mysql.VectorConverter;
 import io.github.happyduke96.squell.exception.MySqlDeadlockException;
@@ -19,6 +25,14 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -58,6 +72,22 @@ public class MySqlIntegrationTest {
                         id CHAR(36) PRIMARY KEY,
                         embedding VARBINARY(255) NOT NULL,
                         labels SET('sql','java','oop','mysql') NOT NULL
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE mysql_events (
+                        id CHAR(36) PRIMARY KEY,
+                        occurredAt DATETIME(6) NOT NULL
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE time_probe (
+                        id CHAR(36) PRIMARY KEY,
+                        localDate DATE NOT NULL,
+                        localDateTime DATETIME(6) NOT NULL,
+                        wallClockTime TIME(6) NOT NULL,
+                        offsetDateTime DATETIME(6) NOT NULL,
+                        zonedDateTime DATETIME(6) NOT NULL
                     )
                     """);
         }
@@ -165,6 +195,24 @@ public class MySqlIntegrationTest {
                 .getFirst();
 
         assertEquals(found.embedding(), original);
+    }
+
+    @Test
+    public void instantColumnRoundTripsThroughARealDatetimeColumnViaInstantConverter() throws SQLException {
+        MySqlEventTable events = new MySqlEventTable(new UuidConverter(), new InstantConverter());
+        UUID id = UUID.randomUUID();
+        Instant original = Instant.now();
+
+        client.insert(events)
+                .values(events.create(id, original))
+                .execute();
+
+        MySqlEvent found = client.select(events)
+                .where(events.id().eq(id))
+                .fetch()
+                .getFirst();
+
+        assertTrue(Duration.between(original, found.occurredAt()).abs().toMillis() < 1);
     }
 
     @Test
@@ -329,5 +377,35 @@ public class MySqlIntegrationTest {
                 .getFirst();
 
         assertEquals(found.labels(), original);
+    }
+
+    @Test
+    public void everyJavaTimeConverterRoundTripsThroughARealMySql() throws SQLException {
+        MySqlTimeProbeTable probes = new MySqlTimeProbeTable(new UuidConverter(), new LocalDateConverter(),
+                new LocalDateTimeConverter(), new LocalTimeConverter(), new OffsetDateTimeConverter(),
+                new ZonedDateTimeConverter());
+        UUID id = UUID.randomUUID();
+        LocalDate localDate = LocalDate.of(2024, 1, 15);
+        LocalDateTime localDateTime = LocalDateTime.of(2024, 1, 15, 10, 30, 0, 123_000_000);
+        LocalTime wallClockTime = LocalTime.of(10, 30, 0);
+        OffsetDateTime offsetDateTime = OffsetDateTime.of(localDateTime, ZoneOffset.of("+05:00"));
+        ZonedDateTime zonedDateTime = ZonedDateTime.of(localDateTime, ZoneId.of("Asia/Tashkent"));
+
+        client.insert(probes)
+                .values(probes.create(id, localDate, localDateTime, wallClockTime, offsetDateTime, zonedDateTime))
+                .execute();
+
+        MySqlTimeProbe found = client.select(probes)
+                .where(probes.id().eq(id))
+                .fetch()
+                .getFirst();
+
+        assertEquals(found.localDate(), localDate);
+        assertEquals(found.localDateTime(), localDateTime);
+        assertEquals(found.wallClockTime(), wallClockTime);
+        // The offset/zone itself doesn't survive the round trip (DATETIME has no timezone
+        // concept at all) — only the absolute instant does, normalized back to UTC.
+        assertEquals(found.offsetDateTime().toInstant(), offsetDateTime.toInstant());
+        assertEquals(found.zonedDateTime().toInstant(), zonedDateTime.toInstant());
     }
 }

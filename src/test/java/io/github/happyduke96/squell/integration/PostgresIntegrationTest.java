@@ -6,6 +6,12 @@ import io.github.happyduke96.squell.converter.postgres.JsonbConverter;
 import io.github.happyduke96.squell.converter.postgres.Range;
 import io.github.happyduke96.squell.converter.postgres.TextArrayConverter;
 import io.github.happyduke96.squell.connection.IsolationLevel;
+import io.github.happyduke96.squell.converter.InstantConverter;
+import io.github.happyduke96.squell.converter.LocalDateConverter;
+import io.github.happyduke96.squell.converter.LocalDateTimeConverter;
+import io.github.happyduke96.squell.converter.LocalTimeConverter;
+import io.github.happyduke96.squell.converter.OffsetDateTimeConverter;
+import io.github.happyduke96.squell.converter.ZonedDateTimeConverter;
 import io.github.happyduke96.squell.exception.PostgresDeadlockException;
 import io.github.happyduke96.squell.exception.PostgresLockNotAvailableException;
 import io.github.happyduke96.squell.execution.PostgresClient;
@@ -22,6 +28,14 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,6 +83,22 @@ public class PostgresIntegrationTest {
                         tags TEXT[] NOT NULL,
                         duration INTERVAL NOT NULL,
                         range INT4RANGE NOT NULL
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE events (
+                        id UUID PRIMARY KEY,
+                        occurredAt TIMESTAMPTZ NOT NULL
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE time_probe (
+                        id UUID PRIMARY KEY,
+                        localDate DATE NOT NULL,
+                        localDateTime TIMESTAMP NOT NULL,
+                        wallClockTime TIME NOT NULL,
+                        offsetDateTime TIMESTAMPTZ NOT NULL,
+                        zonedDateTime TIMESTAMPTZ NOT NULL
                     )
                     """);
         }
@@ -286,6 +316,25 @@ public class PostgresIntegrationTest {
                 .getFirst();
 
         assertEquals(found.range(), new Range<>(5, 15));
+    }
+
+    @Test
+    public void instantColumnRoundTripsThroughARealTimestamptzColumnViaInstantConverter() throws SQLException {
+        EventTable events = new EventTable(new InstantConverter());
+        UUID id = UUID.randomUUID();
+        Instant original = Instant.now();
+
+        client.insert(events)
+                .values(events.create(id, original))
+                .execute();
+
+        Event found = client.select(events)
+                .where(events.id().eq(id))
+                .fetch()
+                .getFirst();
+
+        // TIMESTAMPTZ truncates to microseconds; compare with a tolerance instead of equals().
+        assertTrue(Duration.between(original, found.occurredAt()).abs().toMillis() < 1);
     }
 
     @Test
@@ -560,6 +609,35 @@ public class PostgresIntegrationTest {
                 .where(items.id().eq(nestedId))
                 .fetch()
                 .isEmpty(), "The nested transaction's write must be rolled back to its SAVEPOINT.");
+    }
+
+    @Test
+    public void everyJavaTimeConverterRoundTripsThroughARealPostgres() throws SQLException {
+        TimeProbeTable probes = new TimeProbeTable(new LocalDateConverter(), new LocalDateTimeConverter(),
+                new LocalTimeConverter(), new OffsetDateTimeConverter(), new ZonedDateTimeConverter());
+        UUID id = UUID.randomUUID();
+        LocalDate localDate = LocalDate.of(2024, 1, 15);
+        LocalDateTime localDateTime = LocalDateTime.of(2024, 1, 15, 10, 30, 0, 123_000_000);
+        LocalTime wallClockTime = LocalTime.of(10, 30, 0);
+        OffsetDateTime offsetDateTime = OffsetDateTime.of(localDateTime, ZoneOffset.of("+05:00"));
+        ZonedDateTime zonedDateTime = ZonedDateTime.of(localDateTime, ZoneId.of("Asia/Tashkent"));
+
+        client.insert(probes)
+                .values(probes.create(id, localDate, localDateTime, wallClockTime, offsetDateTime, zonedDateTime))
+                .execute();
+
+        TimeProbe found = client.select(probes)
+                .where(probes.id().eq(id))
+                .fetch()
+                .getFirst();
+
+        assertEquals(found.localDate(), localDate);
+        assertEquals(found.localDateTime(), localDateTime);
+        assertEquals(found.wallClockTime(), wallClockTime);
+        // The offset/zone itself doesn't survive the round trip (TIMESTAMPTZ stores an instant,
+        // not an offset) — only the absolute instant does, normalized back to UTC.
+        assertEquals(found.offsetDateTime().toInstant(), offsetDateTime.toInstant());
+        assertEquals(found.zonedDateTime().toInstant(), zonedDateTime.toInstant());
     }
 
     private static void awaitUninterruptibly(CountDownLatch latch) {

@@ -1,5 +1,6 @@
 package io.github.happyduke96.squell.condition;
 
+import java.util.Collections;
 import java.util.List;
 
 public final class Like implements Condition {
@@ -19,6 +20,6 @@ public final class Like implements Condition {
 
     @Override
     public List<Object> values() {
-        return List.of(pattern);
+        return Collections.singletonList(pattern);
     }
 }

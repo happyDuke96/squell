@@ -19,6 +19,7 @@ import java.util.UUID;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.expectThrows;
 
 /// Exercises `@GeneratedValue` and the `Aggregate`/`HAVING` surface.
 public class CommentTest {
@@ -108,6 +109,20 @@ public class CommentTest {
                 .fetch()
                 .getFirst();
         assertEquals(found.upvotes(), 7);
+    }
+
+    @Test
+    public void incrementWithANullDeltaFailsFastInsteadOfSilentlyNullingTheColumn() throws SQLException {
+        client.insert(comments)
+                .values(comments.create(postId, "tech", 10))
+                .execute();
+
+        // col + NULL is NULL in SQL — a null delta would silently null the counter instead of
+        // incrementing it, so this must fail fast in Java rather than let that through.
+        expectThrows(NullPointerException.class, () -> client.update(comments)
+                .increment(comments.upvotes(), null)
+                .where(comments.category().eq("tech"))
+                .execute());
     }
 
     private void insertSample() throws SQLException {

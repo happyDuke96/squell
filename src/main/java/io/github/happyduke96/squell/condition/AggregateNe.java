@@ -1,5 +1,6 @@
 package io.github.happyduke96.squell.condition;
 
+import java.util.Collections;
 import java.util.List;
 
 public final class AggregateNe<T> implements Condition {
@@ -19,6 +20,6 @@ public final class AggregateNe<T> implements Condition {
 
     @Override
     public List<Object> values() {
-        return List.of(value);
+        return Collections.singletonList(value);
     }
 }

@@ -1,5 +1,6 @@
 package io.github.happyduke96.squell.condition;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -21,6 +22,6 @@ public final class NotILike implements Condition {
 
     @Override
     public List<Object> values() {
-        return List.of(pattern.toLowerCase(Locale.ROOT));
+        return Collections.singletonList(pattern == null ? null : pattern.toLowerCase(Locale.ROOT));
     }
 }

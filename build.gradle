@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'io.github.happyduke96'
-version = '0.1.0'
+version = '0.2.0'
 
 java {
     toolchain {
@@ -69,7 +69,7 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates('io.github.happyduke96', 'squell', '0.1.0')
+    coordinates('io.github.happyduke96', 'squell', '0.2.0')
 
     pom {
         name = 'squell'

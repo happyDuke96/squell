@@ -15,6 +15,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public final class DefaultUpdateStep<T> implements ReturningUpdateStep<T> {
@@ -42,7 +43,7 @@ public final class DefaultUpdateStep<T> implements ReturningUpdateStep<T> {
     @Override
     public <V> DefaultUpdateStep<T> set(Field<V> field, V value) {
         List<Assignment> next = new ArrayList<>(assignments);
-        next.add(new Assignment(field.name(), "?", List.of(field.toSqlValue(value))));
+        next.add(new Assignment(field.name(), "?", Collections.singletonList(field.toSqlValue(value))));
         return new DefaultUpdateStep<>(table, source, next, condition);
     }
 

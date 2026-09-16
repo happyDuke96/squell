@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 public class ConditionTest {
@@ -64,6 +65,15 @@ public class ConditionTest {
 
         assertEquals(built.sql(), "title BETWEEN ? AND ?");
         assertEquals(built.values(), List.of("a", "m"));
+    }
+
+    @Test
+    public void betweenAllowsANullBoundInsteadOfThrowing() {
+        Condition built = posts.title().between(null, "m");
+
+        assertEquals(built.values().size(), 2);
+        assertNull(built.values().get(0));
+        assertEquals(built.values().get(1), "m");
     }
 
     @Test
@@ -149,6 +159,14 @@ public class ConditionTest {
     }
 
     @Test
+    public void likeVariantsAllowANullPatternInsteadOfThrowing() {
+        assertNull(posts.title().like(null).values().getFirst());
+        assertNull(posts.title().notLike(null).values().getFirst());
+        assertNull(posts.title().ilike(null).values().getFirst());
+        assertNull(posts.title().notILike(null).values().getFirst());
+    }
+
+    @Test
     public void qualifiedByPrefixesTheFieldNameWithTheAlias() {
         Field<UUID> aliased = posts.id().qualifiedBy("p");
 
@@ -191,6 +209,16 @@ public class ConditionTest {
 
         assertEquals(built.sql(), "COUNT(*) > ?");
         assertEquals(built.values(), List.of(1L));
+    }
+
+    @Test
+    public void aggregateComparisonsAllowANullValueInsteadOfThrowing() {
+        assertNull(Aggregate.count().eq(null).values().getFirst());
+        assertNull(Aggregate.count().ne(null).values().getFirst());
+        assertNull(Aggregate.count().gt(null).values().getFirst());
+        assertNull(Aggregate.count().lt(null).values().getFirst());
+        assertNull(Aggregate.count().ge(null).values().getFirst());
+        assertNull(Aggregate.count().le(null).values().getFirst());
     }
 
     @Test

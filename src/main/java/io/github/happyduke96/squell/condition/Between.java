@@ -1,5 +1,6 @@
 package io.github.happyduke96.squell.condition;
 
+import java.util.Arrays;
 import java.util.List;
 
 public final class Between<T> implements Condition {
@@ -21,6 +22,6 @@ public final class Between<T> implements Condition {
 
     @Override
     public List<Object> values() {
-        return List.of(field.toSqlValue(low), field.toSqlValue(high));
+        return Arrays.asList(field.toSqlValue(low), field.toSqlValue(high));
     }
 }

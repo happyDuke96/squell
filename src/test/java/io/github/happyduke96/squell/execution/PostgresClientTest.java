@@ -5,6 +5,8 @@ import io.github.happyduke96.squell.AccountTable;
 import io.github.happyduke96.squell.AuthorTable;
 import io.github.happyduke96.squell.Post;
 import io.github.happyduke96.squell.PostTable;
+import io.github.happyduke96.squell.Setting;
+import io.github.happyduke96.squell.SettingTable;
 import io.github.happyduke96.squell.TestDatabase;
 import io.github.happyduke96.squell.condition.Field;
 import io.github.happyduke96.squell.connection.IsolationLevel;
@@ -280,6 +282,27 @@ public class PostgresClientTest {
                 .getFirst();
         assertEquals(reloaded.balance(), 25);
         assertEquals(reloaded.pendingBalance(), 25);
+    }
+
+    @Test
+    public void setWithANullValueClearsTheColumnInsteadOfThrowing() throws SQLException {
+        SettingTable settings = new SettingTable();
+        UUID id = UUID.randomUUID();
+        client.insert(settings)
+                .values(settings.create(id, "acme"))
+                .execute();
+
+        String clearedPrefix = null;
+        client.update(settings)
+                .set(settings.prefix(), clearedPrefix)
+                .where(settings.id().eq(id))
+                .execute();
+
+        Setting reloaded = client.select(settings)
+                .where(settings.id().eq(id))
+                .fetch()
+                .getFirst();
+        assertNull(reloaded.prefix());
     }
 
     @Test

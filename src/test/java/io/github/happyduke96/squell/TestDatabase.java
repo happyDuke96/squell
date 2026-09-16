@@ -11,8 +11,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
 
-/// A fresh, schema-populated H2 database (`authors`/`posts`/`comments`/`tags`/`articles`/`accounts`)
-/// — for tests that don't need a schema of their own.
+/// A fresh, schema-populated H2 database (`authors`/`posts`/`comments`/`tags`/`articles`/
+/// `accounts`/`settings`) — for tests that don't need a schema of their own.
 public final class TestDatabase {
 
     private final DataSource dataSource;
@@ -63,6 +63,12 @@ public final class TestDatabase {
                         id UUID PRIMARY KEY,
                         balance INT NOT NULL,
                         pendingBalance INT NOT NULL
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE settings (
+                        id UUID PRIMARY KEY,
+                        prefix VARCHAR
                     )
                     """);
         }
