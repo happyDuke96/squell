@@ -12,7 +12,7 @@ import java.sql.Statement;
 import java.util.UUID;
 
 /// A fresh, schema-populated H2 database (`authors`/`posts`/`comments`/`tags`/`articles`/
-/// `accounts`/`settings`) — for tests that don't need a schema of their own.
+/// `accounts`/`settings`/`tickets`) — for tests that don't need a schema of their own.
 public final class TestDatabase {
 
     private final DataSource dataSource;
@@ -69,6 +69,12 @@ public final class TestDatabase {
                     CREATE TABLE settings (
                         id UUID PRIMARY KEY,
                         prefix VARCHAR
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE tickets (
+                        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                        label VARCHAR NOT NULL
                     )
                     """);
         }

@@ -6,8 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-/// Accumulates optional filters into one `Condition` — `add(value, toCondition)` skips null/empty
-/// values instead of requiring the caller to branch before adding.
+/// Accumulates optional filters into one `Condition`, skipping null/empty values.
 public final class ConditionBuilder {
 
     private final List<Condition> conditions;

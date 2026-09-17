@@ -4,18 +4,12 @@ import io.github.happyduke96.squell.sql.annotation.Entity;
 import io.github.happyduke96.squell.sql.annotation.GeneratedValue;
 import io.github.happyduke96.squell.sql.annotation.Id;
 
-import java.util.UUID;
-
-@Entity("comments")
-public interface Comment {
+@Entity("tickets")
+public interface Ticket {
 
     @Id
     @GeneratedValue
-    UUID id();
+    long id();
 
-    UUID postId();
-
-    String category();
-
-    int upvotes();
+    String label();
 }

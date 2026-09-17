@@ -16,6 +16,8 @@ import io.github.happyduke96.squell.exception.PostgresDeadlockException;
 import io.github.happyduke96.squell.exception.PostgresLockNotAvailableException;
 import io.github.happyduke96.squell.execution.PostgresClient;
 import io.github.happyduke96.squell.internal.DialectVerifier;
+import io.github.happyduke96.squell.Ticket;
+import io.github.happyduke96.squell.TicketTable;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testng.annotations.AfterClass;
@@ -99,6 +101,12 @@ public class PostgresIntegrationTest {
                         wallClockTime TIME NOT NULL,
                         offsetDateTime TIMESTAMPTZ NOT NULL,
                         zonedDateTime TIMESTAMPTZ NOT NULL
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE tickets (
+                        id BIGSERIAL PRIMARY KEY,
+                        label VARCHAR NOT NULL
                     )
                     """);
         }
@@ -638,6 +646,28 @@ public class PostgresIntegrationTest {
         // not an offset) — only the absolute instant does, normalized back to UTC.
         assertEquals(found.offsetDateTime().toInstant(), offsetDateTime.toInstant());
         assertEquals(found.zonedDateTime().toInstant(), zonedDateTime.toInstant());
+    }
+
+    @Test
+    public void bigserialGeneratesThePrimitiveIdOnARealPostgres() throws SQLException {
+        TicketTable tickets = new TicketTable();
+
+        Ticket draft = tickets.create("first contact");
+        assertEquals(draft.id(), 0L);
+
+        client.insert(tickets)
+                .values(draft)
+                .execute();
+
+        Ticket first = client.select(tickets).fetch().getFirst();
+        assertTrue(first.id() > 0);
+
+        client.insert(tickets)
+                .values(tickets.create("second contact"))
+                .execute();
+
+        long maxId = client.select(tickets).fetch().stream().mapToLong(Ticket::id).max().orElseThrow();
+        assertTrue(maxId > first.id(), "BIGSERIAL must keep incrementing across inserts");
     }
 
     private static void awaitUninterruptibly(CountDownLatch latch) {

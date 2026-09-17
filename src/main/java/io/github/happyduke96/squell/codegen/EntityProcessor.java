@@ -129,14 +129,10 @@ public final class EntityProcessor extends AbstractProcessor {
         return new EntityInfo(packageName, entityName, hasNoArgConstructor);
     }
 
-    /// Column accessor names that collide with a zero-arg `Table`/`DefaultTable` method of a
-    /// different return type — every other method there either takes a parameter or (`id()`)
-    /// already returns `Field<ID>`, so these two are the only names that can't be generated.
+    /// Column names colliding with `Table#name()`/`#fields()`.
     private static final Set<String> RESERVED_COLUMN_NAMES = Set.of("name", "fields");
 
-    /// Rejects entity shapes that would compile into broken generated code: more than one
-    /// `@Id`, an `@Id` not literally named `id()` (required to override `DefaultTable#id()`),
-    /// or a column named `name()`/`fields()` (collides with the generated `Table` method).
+    /// Rejects entity shapes that would compile into broken generated code.
     private boolean validate(TypeElement entityElement, List<ColumnModel> columns) {
         List<ColumnModel> idColumns = columns.stream().filter(ColumnModel::isId).toList();
         if (idColumns.size() > 1) {
@@ -217,6 +213,10 @@ public final class EntityProcessor extends AbstractProcessor {
                 continue;
             }
             boolean generated = method.getAnnotation(GeneratedValue.class) != null;
+            if (generated && isOptional(method.getReturnType())) {
+                error(method, "@GeneratedValue accessor must return the plain type directly, not "
+                        + "java.util.Optional<...> — it's null before insert, not an empty Optional.");
+            }
             boolean isId = method.getAnnotation(Id.class) != null;
             String name = method.getSimpleName().toString();
             Column columnAnnotation = method.getAnnotation(Column.class);
@@ -226,7 +226,7 @@ public final class EntityProcessor extends AbstractProcessor {
             boolean unique = isId || (columnAnnotation != null && columnAnnotation.unique());
             boolean nonNegative = isId && isNumericPrimitive(method.getReturnType());
             String accessorType = method.getReturnType().toString();
-            String columnType = generated ? generatedColumnType(method) : boxed(method.getReturnType());
+            String columnType = boxed(method.getReturnType());
             boolean needsConverter = method.getAnnotation(Convert.class) != null;
             columns.add(new ColumnModel(
                     name,
@@ -252,6 +252,11 @@ public final class EntityProcessor extends AbstractProcessor {
         };
     }
 
+    private static boolean isOptional(TypeMirror type) {
+        return type.getKind() == TypeKind.DECLARED
+                && ((TypeElement) ((DeclaredType) type).asElement()).getQualifiedName().contentEquals("java.util.Optional");
+    }
+
     private String namedConverterClass(ExecutableElement method) {
         TypeMirror converterType;
         try {
@@ -261,19 +266,6 @@ public final class EntityProcessor extends AbstractProcessor {
             converterType = e.getTypeMirror();
         }
         return converterType.toString().equals(NO_CONVERTER) ? null : converterType.toString();
-    }
-
-    private String generatedColumnType(ExecutableElement method) {
-        TypeMirror returnType = method.getReturnType();
-        if (returnType.getKind() == TypeKind.DECLARED) {
-            DeclaredType declared = (DeclaredType) returnType;
-            if (((TypeElement) declared.asElement()).getQualifiedName().contentEquals("java.util.Optional")
-                    && declared.getTypeArguments().size() == 1) {
-                return boxed(declared.getTypeArguments().getFirst());
-            }
-        }
-        error(method, "@GeneratedValue accessor must return java.util.Optional<...>.");
-        return boxed(returnType);
     }
 
     private static String boxed(TypeMirror type) {
@@ -375,7 +367,7 @@ public final class EntityProcessor extends AbstractProcessor {
         out.begin(SourceWriter.PUBLIC + entityName + " create" + SourceWriter.OPEN_PAREN + constructorArgs
                 + SourceWriter.CLOSE_PAREN + SourceWriter.OPEN_BRACE);
         for (ColumnModel column : columns) {
-            if (column.isId() && column.nonNegative()) {
+            if (column.isId() && column.nonNegative() && !column.generated()) {
                 out.begin("if (" + column.name() + " < 0)" + SourceWriter.OPEN_BRACE);
                 out.line("throw new IllegalArgumentException(\"[" + column.columnName()
                         + "] must not be negative, got [\" + " + column.name() + " + \"].\")" + SourceWriter.SEMICOLON);
@@ -406,9 +398,7 @@ public final class EntityProcessor extends AbstractProcessor {
         out.begin(SourceWriter.PUBLIC + entityName + " fromRow" + SourceWriter.OPEN_PAREN + RESULT_SET
                 + " row" + SourceWriter.CLOSE_PAREN + " throws " + SQL_EXCEPTION + SourceWriter.OPEN_BRACE);
         out.returnLine("new " + entityName + IMPL_SUFFIX + SourceWriter.OPEN_PAREN + columns.stream()
-                .map(c -> c.generated()
-                        ? "java.util.Optional.of((" + c.columnType() + ") " + c.name() + ".readFrom(row))"
-                        : "(" + c.accessorType() + ") " + c.name() + ".readFrom(row)")
+                .map(c -> "(" + c.accessorType() + ") " + c.name() + ".readFrom(row)")
                 .collect(Collectors.joining(SourceWriter.COMMA)) + SourceWriter.CLOSE_PAREN);
         out.end();
         out.blank();
@@ -417,9 +407,7 @@ public final class EntityProcessor extends AbstractProcessor {
         out.begin(SourceWriter.PUBLIC + LIST + "<Object> values" + SourceWriter.OPEN_PAREN + entityName
                 + " entity" + SourceWriter.CLOSE_PAREN + SourceWriter.OPEN_BRACE);
         out.returnLine("java.util.Arrays.asList" + SourceWriter.OPEN_PAREN + columns.stream()
-                .map(c -> c.generated()
-                        ? c.name() + ".toSqlValue(entity." + c.name() + "().orElse(null))"
-                        : c.name() + ".toSqlValue(entity." + c.name() + "())")
+                .map(c -> c.name() + ".toSqlValue(entity." + c.name() + "())")
                 .collect(Collectors.joining(SourceWriter.COMMA)) + SourceWriter.CLOSE_PAREN);
         out.end();
         out.blank();
@@ -438,8 +426,22 @@ public final class EntityProcessor extends AbstractProcessor {
 
     private static String createArgRefs(List<ColumnModel> columns) {
         return columns.stream()
-                .map(c -> c.generated() ? "java.util.Optional.empty()" : c.name())
+                .map(c -> c.generated() ? generatedDefaultLiteral(c.accessorType()) : c.name())
                 .collect(Collectors.joining(SourceWriter.COMMA));
+    }
+
+    /// A primitive can't hold `null` before insert, so it starts at zero instead (JPA/Hibernate
+    /// convention); a reference type starts at `null`.
+    private static String generatedDefaultLiteral(String accessorType) {
+        return switch (accessorType) {
+            case "long" -> "0L";
+            case "float" -> "0.0f";
+            case "double" -> "0.0";
+            case "char" -> "'\\0'";
+            case "boolean" -> "false";
+            case "int", "short", "byte" -> "0";
+            default -> "null";
+        };
     }
 
     private static String fieldRefs(List<ColumnModel> columns) {

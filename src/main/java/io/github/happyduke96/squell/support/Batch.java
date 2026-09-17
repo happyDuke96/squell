@@ -8,8 +8,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/// Groups a flat list of children under their parents by a shared key — avoids an N+1 query when
-/// fetching parents and children separately and joining them in memory.
+/// Groups a flat list of children under their parents by a shared key.
 public final class Batch<P, K, C> {
 
     private final List<P> parents;

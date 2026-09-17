@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'io.github.happyduke96'
-version = '0.2.1'
+version = '0.3.0'
 
 java {
     toolchain {
@@ -74,7 +74,7 @@ mavenPublishing {
 
     pom {
         name = 'squell'
-        description = 'SQL query builder for Java'
+        description = 'Lightweight SQL query builder for Java, built on strict Elegant Objects principles — no reflection, immutable steps, constructor injection only.'
         url = 'https://github.com/happyDuke96/squell'
         licenses {
             license {

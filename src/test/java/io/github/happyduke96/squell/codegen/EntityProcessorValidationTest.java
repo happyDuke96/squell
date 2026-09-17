@@ -139,6 +139,70 @@ public class EntityProcessorValidationTest {
     }
 
     @Test
+    public void generatedValueOnAPrimitiveProducesNoErrors() {
+        List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("PrimitiveGeneratedProbe", """
+                package io.github.happyduke96.squell.codegen.probe;
+
+                import io.github.happyduke96.squell.sql.annotation.Entity;
+                import io.github.happyduke96.squell.sql.annotation.GeneratedValue;
+                import io.github.happyduke96.squell.sql.annotation.Id;
+
+                @Entity("tickets")
+                public interface PrimitiveGeneratedProbe {
+                    @Id
+                    @GeneratedValue
+                    long id();
+                }
+                """);
+
+        assertTrue(diagnostics.stream().noneMatch(d -> d.getKind() == Diagnostic.Kind.ERROR));
+    }
+
+    @Test
+    public void generatedValueWrappedInOptionalIsRejected() {
+        List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("OptionalGeneratedProbe", """
+                package io.github.happyduke96.squell.codegen.probe;
+
+                import io.github.happyduke96.squell.sql.annotation.Entity;
+                import io.github.happyduke96.squell.sql.annotation.GeneratedValue;
+                import io.github.happyduke96.squell.sql.annotation.Id;
+
+                import java.util.Optional;
+                import java.util.UUID;
+
+                @Entity("vouchers")
+                public interface OptionalGeneratedProbe {
+                    @Id
+                    @GeneratedValue
+                    Optional<UUID> id();
+                }
+                """);
+
+        assertTrue(diagnostics.stream().anyMatch(d -> d.getKind() == Diagnostic.Kind.ERROR
+                && d.getMessage(null).contains("must return the plain type directly, not")));
+    }
+
+    @Test
+    public void generatedValueOnABoxedIntegerProducesNoErrors() {
+        List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("BoxedGeneratedProbe", """
+                package io.github.happyduke96.squell.codegen.probe;
+
+                import io.github.happyduke96.squell.sql.annotation.Entity;
+                import io.github.happyduke96.squell.sql.annotation.GeneratedValue;
+                import io.github.happyduke96.squell.sql.annotation.Id;
+
+                @Entity("invoices")
+                public interface BoxedGeneratedProbe {
+                    @Id
+                    @GeneratedValue
+                    Integer id();
+                }
+                """);
+
+        assertTrue(diagnostics.stream().noneMatch(d -> d.getKind() == Diagnostic.Kind.ERROR));
+    }
+
+    @Test
     public void aValidEntityProducesNoErrors() {
         List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("ValidProbe", """
                 package io.github.happyduke96.squell.codegen.probe;

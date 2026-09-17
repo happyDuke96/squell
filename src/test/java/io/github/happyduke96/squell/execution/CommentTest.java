@@ -18,7 +18,8 @@ import java.util.UUID;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.expectThrows;
 
 /// Exercises `@GeneratedValue` and the `Aggregate`/`HAVING` surface.
@@ -49,7 +50,7 @@ public class CommentTest {
     public void createReturnsAnEntityWithNoIdYet() {
         Comment draft = comments.create(postId, "tech", 5);
 
-        assertTrue(draft.id().isEmpty());
+        assertNull(draft.id());
     }
 
     @Test
@@ -72,7 +73,7 @@ public class CommentTest {
                 .fetch()
                 .getFirst();
 
-        assertTrue(found.id().isPresent());
+        assertNotNull(found.id());
     }
 
     @Test
