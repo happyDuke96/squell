@@ -2,6 +2,7 @@ package io.github.happyduke96.squell.condition;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 public final class NotIn<T> implements Condition {
@@ -11,7 +12,7 @@ public final class NotIn<T> implements Condition {
 
     NotIn(Field<T> field, Collection<T> values) {
         this.field = field;
-        this.values = values;
+        this.values = Collections.unmodifiableList(new ArrayList<>(values));
     }
 
     @Override

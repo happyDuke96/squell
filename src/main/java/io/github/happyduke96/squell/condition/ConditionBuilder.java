@@ -10,11 +10,20 @@ import java.util.function.Function;
 /// values instead of requiring the caller to branch before adding.
 public final class ConditionBuilder {
 
-    private final List<Condition> conditions = new ArrayList<>();
+    private final List<Condition> conditions;
+
+    public ConditionBuilder() {
+        this(List.of());
+    }
+
+    private ConditionBuilder(List<Condition> conditions) {
+        this.conditions = conditions;
+    }
 
     public ConditionBuilder add(Condition condition) {
-        conditions.add(condition);
-        return this;
+        List<Condition> next = new ArrayList<>(conditions);
+        next.add(condition);
+        return new ConditionBuilder(next);
     }
 
     public <T> ConditionBuilder add(T value, Function<T, Condition> toCondition) {

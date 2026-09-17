@@ -1,5 +1,7 @@
 package io.github.happyduke96.squell.support;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,9 +18,9 @@ public final class Batch<P, K, C> {
     private final Function<C, K> childKey;
 
     public Batch(List<P> parents, Function<P, K> parentKey, List<C> children, Function<C, K> childKey) {
-        this.parents = parents;
+        this.parents = Collections.unmodifiableList(new ArrayList<>(parents));
         this.parentKey = parentKey;
-        this.children = children;
+        this.children = Collections.unmodifiableList(new ArrayList<>(children));
         this.childKey = childKey;
     }
 

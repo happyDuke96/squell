@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'io.github.happyduke96'
-version = '0.2.0'
+version = '0.2.1'
 
 java {
     toolchain {
@@ -31,6 +31,7 @@ dependencies {
     testImplementation 'com.h2database:h2:2.3.232'
     testImplementation "org.postgresql:postgresql:${postgresqlDriverVersion}"
     testImplementation 'org.testng:testng:7.12.0'
+    testImplementation 'com.tngtech.archunit:archunit:1.4.1'
 
     testImplementation 'org.testcontainers:testcontainers:1.21.3'
     testImplementation 'org.testcontainers:postgresql:1.21.3'
@@ -69,7 +70,7 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates('io.github.happyduke96', 'squell', '0.2.0')
+    coordinates('io.github.happyduke96', 'squell', '0.2.1')
 
     pom {
         name = 'squell'

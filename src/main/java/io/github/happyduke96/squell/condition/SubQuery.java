@@ -1,5 +1,7 @@
 package io.github.happyduke96.squell.condition;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /// An embedded `SELECT`, for `Field#in(SubQuery)`/`notIn(SubQuery)` — from `SelectStep#subQuery`.
@@ -10,7 +12,7 @@ public final class SubQuery<T> {
 
     public SubQuery(String sql, List<Object> values) {
         this.sql = sql;
-        this.values = values;
+        this.values = Collections.unmodifiableList(new ArrayList<>(values));
     }
 
     public String sql() {
