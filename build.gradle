@@ -42,7 +42,7 @@ dependencies {
     testImplementation 'commons-codec:commons-codec:1.16.1'
     constraints {
         // CVE-2024-25710 / CVE-2024-26308 (commons-compress < 1.26.0).
-        testImplementation('org.apache.commons:commons-compress:1.26.0')
+        testImplementation('org.apache.commons:commons-compress:1.28.0')
         // CVE-2025-48924 (commons-lang3 < 3.18.0), pulled by commons-compress itself.
         testImplementation('org.apache.commons:commons-lang3:3.18.0')
     }
