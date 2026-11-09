@@ -26,5 +26,8 @@ public interface ReturningUpdateStep<T> extends UpdateStep<T> {
         return test ? where(condition.get()) : this;
     }
 
+    @Override
+    <V> ReturningUpdateStep<T> whereVersion(Field<V> field, V expectedVersion);
+
     List<T> updateAndReturn() throws SQLException;
 }

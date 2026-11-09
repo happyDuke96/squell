@@ -6,6 +6,7 @@ import io.github.happyduke96.squell.sql.annotation.Entity;
 import io.github.happyduke96.squell.sql.annotation.GenerateTableRegistry;
 import io.github.happyduke96.squell.sql.annotation.GeneratedValue;
 import io.github.happyduke96.squell.sql.annotation.Id;
+import io.github.happyduke96.squell.sql.annotation.Version;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
@@ -46,6 +47,7 @@ public final class EntityProcessor extends AbstractProcessor {
     private static final String NO_CONVERTER = "io.github.happyduke96.squell.converter.NoConverter";
     private static final String TABLE = "io.github.happyduke96.squell.sql.Table";
     private static final String DEFAULT_TABLE = "io.github.happyduke96.squell.sql.DefaultTable";
+    private static final String VERSIONED_TABLE = "io.github.happyduke96.squell.sql.VersionedTable";
     private static final String LIST = "java.util.List";
     private static final String RESULT_SET = "java.sql.ResultSet";
     private static final String SQL_EXCEPTION = "java.sql.SQLException";
@@ -59,6 +61,7 @@ public final class EntityProcessor extends AbstractProcessor {
                                String accessorType,
                                String columnType,
                                boolean isId,
+                               boolean isVersion,
                                boolean needsConverter,
                                String converterClass,
                                boolean generated,
@@ -151,6 +154,21 @@ public final class EntityProcessor extends AbstractProcessor {
                     + "()` — DefaultTable<T, ID> requires it.");
             return false;
         }
+        List<ColumnModel> versionColumns = columns.stream().filter(ColumnModel::isVersion).toList();
+        if (versionColumns.size() > 1) {
+            String names = versionColumns.stream().map(ColumnModel::name).collect(Collectors.joining(", "));
+            for (ColumnModel version : versionColumns) {
+                error(version.element(), "@Entity [" + entityElement.getSimpleName() + "] has more than one "
+                        + "@Version field (" + names + ") — only one optimistic-lock counter is supported.");
+            }
+            return false;
+        }
+        for (ColumnModel column : columns) {
+            if (column.isId() && column.isVersion()) {
+                error(column.element(), "`" + column.name() + "()` can't be both @Id and @Version.");
+                return false;
+            }
+        }
         for (ColumnModel column : columns) {
             if (RESERVED_COLUMN_NAMES.contains(column.name())) {
                 error(column.element(), "A column accessor can't be named `" + column.name() + "()` — it "
@@ -218,11 +236,16 @@ public final class EntityProcessor extends AbstractProcessor {
                         + "java.util.Optional<...> — it's null before insert, not an empty Optional.");
             }
             boolean isId = method.getAnnotation(Id.class) != null;
+            boolean isVersion = method.getAnnotation(Version.class) != null;
+            if (isVersion && !isValidVersionType(method.getReturnType())) {
+                error(method, "@Version accessor must return int/long/Integer/Long, not [" + method.getReturnType()
+                        + "].");
+            }
             String name = method.getSimpleName().toString();
             Column columnAnnotation = method.getAnnotation(Column.class);
             String columnName = (columnAnnotation != null && !columnAnnotation.value().isEmpty())
                     ? columnAnnotation.value() : name;
-            boolean nonNull = isId || (columnAnnotation != null && columnAnnotation.nonNull());
+            boolean nonNull = isId || isVersion || (columnAnnotation != null && columnAnnotation.nonNull());
             boolean unique = isId || (columnAnnotation != null && columnAnnotation.unique());
             boolean nonNegative = isId && isNumericPrimitive(method.getReturnType());
             String accessorType = method.getReturnType().toString();
@@ -234,9 +257,10 @@ public final class EntityProcessor extends AbstractProcessor {
                     accessorType,
                     columnType,
                     isId,
+                    isVersion,
                     needsConverter,
                     needsConverter ? namedConverterClass(method) : null,
-                    generated,
+                    generated || isVersion,
                     nonNull,
                     unique,
                     nonNegative,
@@ -255,6 +279,17 @@ public final class EntityProcessor extends AbstractProcessor {
     private static boolean isOptional(TypeMirror type) {
         return type.getKind() == TypeKind.DECLARED
                 && ((TypeElement) ((DeclaredType) type).asElement()).getQualifiedName().contentEquals("java.util.Optional");
+    }
+
+    private static boolean isValidVersionType(TypeMirror type) {
+        if (type.getKind() == TypeKind.INT || type.getKind() == TypeKind.LONG) {
+            return true;
+        }
+        if (type.getKind() != TypeKind.DECLARED) {
+            return false;
+        }
+        String qualifiedName = ((TypeElement) ((DeclaredType) type).asElement()).getQualifiedName().toString();
+        return qualifiedName.equals("java.lang.Integer") || qualifiedName.equals("java.lang.Long");
     }
 
     private String namedConverterClass(ExecutableElement method) {
@@ -290,9 +325,16 @@ public final class EntityProcessor extends AbstractProcessor {
     private static String render(String packageName, String entityName, String tableName, List<ColumnModel> columns,
             boolean hasNoArgConstructor) {
         Optional<ColumnModel> idColumn = columns.stream().filter(ColumnModel::isId).findFirst();
-        String implementsClause = idColumn
-                .map(id -> DEFAULT_TABLE + "<" + entityName + SourceWriter.COMMA + id.columnType() + ">")
-                .orElse(TABLE + "<" + entityName + ">");
+        Optional<ColumnModel> versionColumn = columns.stream().filter(ColumnModel::isVersion).findFirst();
+        List<String> implementedInterfaces = new ArrayList<>();
+        idColumn.ifPresent(id -> implementedInterfaces.add(
+                DEFAULT_TABLE + "<" + entityName + SourceWriter.COMMA + id.columnType() + ">"));
+        versionColumn.ifPresent(version -> implementedInterfaces.add(
+                VERSIONED_TABLE + "<" + entityName + SourceWriter.COMMA + version.columnType() + ">"));
+        if (implementedInterfaces.isEmpty()) {
+            implementedInterfaces.add(TABLE + "<" + entityName + ">");
+        }
+        String implementsClause = String.join(SourceWriter.COMMA, implementedInterfaces);
         List<ColumnModel> convertedColumns = columns.stream().filter(ColumnModel::needsConverter).toList();
 
         SourceWriter out = new SourceWriter();
@@ -351,7 +393,7 @@ public final class EntityProcessor extends AbstractProcessor {
         for (ColumnModel column : columns) {
             String signature = SourceWriter.PUBLIC + FIELD + "<" + column.columnType() + "> " + column.name()
                     + SourceWriter.OPEN_PAREN + SourceWriter.CLOSE_PAREN + SourceWriter.OPEN_BRACE;
-            if (column.isId()) {
+            if (column.isId() || column.isVersion()) {
                 out.override();
             }
             out.begin(signature);
@@ -426,7 +468,8 @@ public final class EntityProcessor extends AbstractProcessor {
 
     private static String createArgRefs(List<ColumnModel> columns) {
         return columns.stream()
-                .map(c -> c.generated() ? generatedDefaultLiteral(c.accessorType()) : c.name())
+                .map(c -> c.isVersion() ? versionDefaultLiteral(c.accessorType())
+                        : c.generated() ? generatedDefaultLiteral(c.accessorType()) : c.name())
                 .collect(Collectors.joining(SourceWriter.COMMA));
     }
 
@@ -442,6 +485,11 @@ public final class EntityProcessor extends AbstractProcessor {
             case "int", "short", "byte" -> "0";
             default -> "null";
         };
+    }
+
+    /// Unlike a generated id, a version counter always has a value — `0`, even for a wrapper type.
+    private static String versionDefaultLiteral(String accessorType) {
+        return accessorType.equals("long") || accessorType.equals("java.lang.Long") ? "0L" : "0";
     }
 
     private static String fieldRefs(List<ColumnModel> columns) {

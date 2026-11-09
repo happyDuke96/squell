@@ -203,6 +203,95 @@ public class EntityProcessorValidationTest {
     }
 
     @Test
+    public void multipleVersionFieldsAreRejected() {
+        List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("MultiVersionProbe", """
+                package io.github.happyduke96.squell.codegen.probe;
+
+                import io.github.happyduke96.squell.sql.annotation.Entity;
+                import io.github.happyduke96.squell.sql.annotation.Id;
+                import io.github.happyduke96.squell.sql.annotation.Version;
+
+                @Entity("carts")
+                public interface MultiVersionProbe {
+                    @Id
+                    long id();
+                    @Version
+                    int versionA();
+                    @Version
+                    int versionB();
+                }
+                """);
+
+        assertTrue(diagnostics.stream().anyMatch(d -> d.getKind() == Diagnostic.Kind.ERROR
+                && d.getMessage(null).contains("more than one @Version field")));
+    }
+
+    @Test
+    public void versionOnAnUnsupportedTypeIsRejected() {
+        List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("StringVersionProbe", """
+                package io.github.happyduke96.squell.codegen.probe;
+
+                import io.github.happyduke96.squell.sql.annotation.Entity;
+                import io.github.happyduke96.squell.sql.annotation.Id;
+                import io.github.happyduke96.squell.sql.annotation.Version;
+
+                @Entity("carts")
+                public interface StringVersionProbe {
+                    @Id
+                    long id();
+                    @Version
+                    String version();
+                }
+                """);
+
+        assertTrue(diagnostics.stream().anyMatch(d -> d.getKind() == Diagnostic.Kind.ERROR
+                && d.getMessage(null).contains("must return int/long/Integer/Long")));
+    }
+
+    @Test
+    public void idAndVersionOnTheSameAccessorIsRejected() {
+        List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("IdVersionClashProbe", """
+                package io.github.happyduke96.squell.codegen.probe;
+
+                import io.github.happyduke96.squell.sql.annotation.Entity;
+                import io.github.happyduke96.squell.sql.annotation.Id;
+                import io.github.happyduke96.squell.sql.annotation.Version;
+
+                @Entity("carts")
+                public interface IdVersionClashProbe {
+                    @Id
+                    @Version
+                    long id();
+                }
+                """);
+
+        assertTrue(diagnostics.stream().anyMatch(d -> d.getKind() == Diagnostic.Kind.ERROR
+                && d.getMessage(null).contains("can't be both @Id and @Version")));
+    }
+
+    @Test
+    public void anEntityWithIdAndVersionProducesNoErrors() {
+        List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("IdAndVersionProbe", """
+                package io.github.happyduke96.squell.codegen.probe;
+
+                import io.github.happyduke96.squell.sql.annotation.Entity;
+                import io.github.happyduke96.squell.sql.annotation.Id;
+                import io.github.happyduke96.squell.sql.annotation.Version;
+
+                @Entity("carts")
+                public interface IdAndVersionProbe {
+                    @Id
+                    long id();
+                    @Version
+                    Integer version();
+                    String label();
+                }
+                """);
+
+        assertTrue(diagnostics.stream().noneMatch(d -> d.getKind() == Diagnostic.Kind.ERROR));
+    }
+
+    @Test
     public void aValidEntityProducesNoErrors() {
         List<Diagnostic<? extends JavaFileObject>> diagnostics = compile("ValidProbe", """
                 package io.github.happyduke96.squell.codegen.probe;

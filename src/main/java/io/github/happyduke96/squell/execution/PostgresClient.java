@@ -2,6 +2,7 @@ package io.github.happyduke96.squell.execution;
 
 import io.github.happyduke96.squell.condition.Field;
 import io.github.happyduke96.squell.sql.AliasedTable;
+import io.github.happyduke96.squell.sql.DefaultTable;
 import io.github.happyduke96.squell.sql.Table;
 
 import io.github.happyduke96.squell.connection.IsolationLevel;
@@ -16,6 +17,9 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 
 /// Entry point for PostgreSQL: `select`/`insert`/`update`/`delete`/`sql`, plus `validateSchema` and
 /// `transaction`. Unlike `MySqlClient`, `insert` supports `RETURNING` and `ON CONFLICT`.
@@ -46,6 +50,13 @@ public final class PostgresClient {
 
     public <T> ReturningDeleteStep<T> delete(Table<T> table) {
         return delegate.delete(table);
+    }
+
+    /// One `IN` query for the children of several parents, grouped by `childKey`; parents with
+    /// no children are absent from the map.
+    public <K, C> Map<K, List<C>> fetchRelated(Collection<K> parentIds, Table<C> childTable,
+            Field<K> childForeignKey, Function<C, K> childKey) throws SQLException {
+        return delegate.fetchRelated(parentIds, childTable, childForeignKey, childKey);
     }
 
     public <T> int[] insertBatch(Table<T> table, List<T> entities) throws SQLException {
@@ -194,6 +205,24 @@ public final class PostgresClient {
 
         public <T> ReturningDeleteStep<T> delete(Table<T> table) {
             return delegate.delete(table);
+        }
+
+        /// One `IN` query for the children of several parents, grouped by `childKey`; parents with
+        /// no children are absent from the map.
+        public <K, C> Map<K, List<C>> fetchRelated(Collection<K> parentIds, Table<C> childTable,
+                Field<K> childForeignKey, Function<C, K> childKey) throws SQLException {
+            return delegate.fetchRelated(parentIds, childTable, childForeignKey, childKey);
+        }
+
+        /// Fetch by id, cached for this transaction (misses too). `update`/`delete` evict; `insert` and
+        /// raw `sql` need `forget`.
+        public <T, ID> Optional<T> findCached(DefaultTable<T, ID> table, ID id) throws SQLException {
+            return delegate.findCached(table, id);
+        }
+
+        /// Evicts a `findCached` entry after a write that bypasses `update`/`delete`.
+        public void forget(Table<?> table, Object id) {
+            delegate.forget(table, id);
         }
 
         /// Raw SQL, bound positionally to its `?` placeholders — `sql` is not escaped or

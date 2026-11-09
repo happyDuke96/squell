@@ -1,7 +1,9 @@
 package io.github.happyduke96.squell.execution.impl;
 
+import io.github.happyduke96.squell.condition.Condition;
 import io.github.happyduke96.squell.condition.Field;
 import io.github.happyduke96.squell.sql.AliasedTable;
+import io.github.happyduke96.squell.sql.DefaultTable;
 import io.github.happyduke96.squell.sql.Table;
 
 import io.github.happyduke96.squell.connection.ConnectionSource;
@@ -33,9 +35,12 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public final class DefaultClient {
 
@@ -63,6 +68,17 @@ public final class DefaultClient {
 
     public <T> ReturningDeleteStep<T> delete(Table<T> table) {
         return new DefaultDeleteStep<>(table, new PerCallConnection(dataSource));
+    }
+
+    public <K, C> Map<K, List<C>> fetchRelated(Collection<K> parentIds, Table<C> childTable,
+            Field<K> childForeignKey, Function<C, K> childKey) throws SQLException {
+        if (parentIds.isEmpty()) {
+            return Map.of();
+        }
+        List<C> children = select(childTable)
+                .where(childForeignKey.in(parentIds))
+                .fetch();
+        return children.stream().collect(Collectors.groupingBy(childKey));
     }
 
     public <T> int[] insertBatch(Table<T> table, List<T> entities) throws SQLException {
@@ -313,8 +329,12 @@ public final class DefaultClient {
     }
 
     public static final class Transaction {
+        private record CacheKey(String tableName, Object id) {
+        }
+
         private final ConnectionSource source;
         private final DataSource dataSource;
+        private final Map<CacheKey, Object> identityCache = new HashMap<>();
 
         private Transaction(Connection connection, DataSource dataSource) {
             this.source = new SharedConnection(connection);
@@ -334,11 +354,151 @@ public final class DefaultClient {
         }
 
         public <T> ReturningUpdateStep<T> update(Table<T> table) {
-            return new DefaultUpdateStep<>(table, source);
+            return new CacheInvalidatingUpdateStep<>(new DefaultUpdateStep<>(table, source), table);
         }
 
         public <T> ReturningDeleteStep<T> delete(Table<T> table) {
-            return new DefaultDeleteStep<>(table, source);
+            return new CacheInvalidatingDeleteStep<>(new DefaultDeleteStep<>(table, source), table);
+        }
+
+        public <K, C> Map<K, List<C>> fetchRelated(Collection<K> parentIds, Table<C> childTable,
+                Field<K> childForeignKey, Function<C, K> childKey) throws SQLException {
+            if (parentIds.isEmpty()) {
+                return Map.of();
+            }
+            List<C> children = select(childTable)
+                    .where(childForeignKey.in(parentIds))
+                    .fetch();
+            return children.stream().collect(Collectors.groupingBy(childKey));
+        }
+
+        private void forgetTable(String tableName) {
+            identityCache.keySet().removeIf(key -> key.tableName().equals(tableName));
+        }
+
+        /// Evicts exactly these rows by `@Id`; falls back to the whole table if there's no usable id.
+        private <T> void forgetRows(Table<T> table, List<T> rows) {
+            if (!(table instanceof DefaultTable<?, ?> defaultTable)) {
+                forgetTable(table.name());
+                return;
+            }
+            List<Field<?>> fields = table.fields();
+            String idName = defaultTable.id().name();
+            int idIndex = -1;
+            for (int i = 0; i < fields.size(); i++) {
+                if (fields.get(i).name().equals(idName)) {
+                    idIndex = i;
+                    break;
+                }
+            }
+            if (idIndex == -1) {
+                forgetTable(table.name());
+                return;
+            }
+            for (T row : rows) {
+                identityCache.remove(new CacheKey(table.name(), table.values(row).get(idIndex)));
+            }
+        }
+
+        private final class CacheInvalidatingUpdateStep<T> implements ReturningUpdateStep<T> {
+            private final ReturningUpdateStep<T> delegate;
+            private final Table<T> table;
+
+            private CacheInvalidatingUpdateStep(ReturningUpdateStep<T> delegate, Table<T> table) {
+                this.delegate = delegate;
+                this.table = table;
+            }
+
+            @Override
+            public <V> ReturningUpdateStep<T> set(Field<V> field, V value) {
+                return new CacheInvalidatingUpdateStep<>(delegate.set(field, value), table);
+            }
+
+            @Override
+            public <V> ReturningUpdateStep<T> set(Field<V> field, Field<V> other) {
+                return new CacheInvalidatingUpdateStep<>(delegate.set(field, other), table);
+            }
+
+            @Override
+            public <N extends Number> ReturningUpdateStep<T> increment(Field<N> field, N delta) {
+                return new CacheInvalidatingUpdateStep<>(delegate.increment(field, delta), table);
+            }
+
+            @Override
+            public ReturningUpdateStep<T> where(Condition condition) {
+                return new CacheInvalidatingUpdateStep<>(delegate.where(condition), table);
+            }
+
+            @Override
+            public <V> ReturningUpdateStep<T> whereVersion(Field<V> field, V expectedVersion) {
+                return new CacheInvalidatingUpdateStep<>(delegate.whereVersion(field, expectedVersion), table);
+            }
+
+            /// Coarse — an `execute()` only reports a row count, not which rows, so there's no id
+            /// to evict precisely.
+            @Override
+            public int execute() throws SQLException {
+                int affected = delegate.execute();
+                forgetTable(table.name());
+                return affected;
+            }
+
+            @Override
+            public List<T> updateAndReturn() throws SQLException {
+                List<T> result = delegate.updateAndReturn();
+                forgetRows(table, result);
+                return result;
+            }
+        }
+
+        private final class CacheInvalidatingDeleteStep<T> implements ReturningDeleteStep<T> {
+            private final ReturningDeleteStep<T> delegate;
+            private final Table<T> table;
+
+            private CacheInvalidatingDeleteStep(ReturningDeleteStep<T> delegate, Table<T> table) {
+                this.delegate = delegate;
+                this.table = table;
+            }
+
+            @Override
+            public ReturningDeleteStep<T> where(Condition condition) {
+                return new CacheInvalidatingDeleteStep<>(delegate.where(condition), table);
+            }
+
+            @Override
+            public int execute() throws SQLException {
+                int affected = delegate.execute();
+                forgetTable(table.name());
+                return affected;
+            }
+
+            @Override
+            public List<T> deleteAndReturn() throws SQLException {
+                List<T> result = delegate.deleteAndReturn();
+                forgetRows(table, result);
+                return result;
+            }
+        }
+
+        /// Fetches by id, cached per (table, id) for this transaction, including a cached "not
+        /// found". `update`/`delete` here forget it automatically; `insert`/raw `sql` need `forget`.
+        public <T, ID> Optional<T> findCached(DefaultTable<T, ID> table, ID id) throws SQLException {
+            CacheKey key = new CacheKey(table.name(), id);
+            if (identityCache.containsKey(key)) {
+                @SuppressWarnings("unchecked")
+                T cached = (T) identityCache.get(key);
+                return Optional.ofNullable(cached);
+            }
+            Optional<T> found = select(table)
+                    .where(table.byId(id))
+                    .fetchOne();
+            identityCache.put(key, found.orElse(null));
+            return found;
+        }
+
+        /// Evicts a cached `findCached` result — only needed after `insert`/raw `sql`.
+        public void forget(Table<?> table, Object id) {
+            identityCache.remove(new CacheKey(table.name(), id));
         }
 
         public RawStep sql(@Language("SQL") String sql, Object... params) {

@@ -312,7 +312,9 @@ public class PostgresClientTest {
                         .where(posts.id().eq(UUID.randomUUID()))
                         .execute());
 
-        assertEquals(thrown.getMessage(), "UPDATE [posts] requires at least one set(...) call.");
+        assertEquals(thrown.getMessage(),
+                "UPDATE [posts] requires at least one set(...)/increment(...) call — "
+                        + "whereVersion(...) alone doesn't count.");
     }
 
     @Test
@@ -322,7 +324,9 @@ public class PostgresClientTest {
                         .where(posts.id().eq(UUID.randomUUID()))
                         .updateAndReturn());
 
-        assertEquals(thrown.getMessage(), "UPDATE [posts] requires at least one set(...) call.");
+        assertEquals(thrown.getMessage(),
+                "UPDATE [posts] requires at least one set(...)/increment(...) call — "
+                        + "whereVersion(...) alone doesn't count.");
     }
 
     @Test

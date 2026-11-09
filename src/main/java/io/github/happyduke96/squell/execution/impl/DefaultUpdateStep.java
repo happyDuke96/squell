@@ -7,6 +7,7 @@ import io.github.happyduke96.squell.sql.Table;
 
 import io.github.happyduke96.squell.connection.ConnectionSource;
 import io.github.happyduke96.squell.exception.DataAccessException;
+import io.github.happyduke96.squell.exception.OptimisticLockException;
 import io.github.happyduke96.squell.execution.ReturningUpdateStep;
 import io.github.happyduke96.squell.internal.SqlBuilder;
 
@@ -27,74 +28,92 @@ public final class DefaultUpdateStep<T> implements ReturningUpdateStep<T> {
     private final ConnectionSource source;
     private final List<Assignment> assignments;
     private final Condition condition;
+    private final boolean versionGuarded;
+    private final boolean hasRealAssignment;
 
     public DefaultUpdateStep(Table<T> table, ConnectionSource source) {
-        this(table, source, List.of(), NoCondition.INSTANCE);
+        this(table, source, List.of(), NoCondition.INSTANCE, false, false);
     }
 
     private DefaultUpdateStep(Table<T> table, ConnectionSource source, List<Assignment> assignments,
-            Condition condition) {
+            Condition condition, boolean versionGuarded, boolean hasRealAssignment) {
         this.table = table;
         this.source = source;
         this.assignments = assignments;
         this.condition = condition;
+        this.versionGuarded = versionGuarded;
+        this.hasRealAssignment = hasRealAssignment;
     }
 
     @Override
     public <V> DefaultUpdateStep<T> set(Field<V> field, V value) {
         List<Assignment> next = new ArrayList<>(assignments);
         next.add(new Assignment(field.name(), "?", Collections.singletonList(field.toSqlValue(value))));
-        return new DefaultUpdateStep<>(table, source, next, condition);
+        return new DefaultUpdateStep<>(table, source, next, condition, versionGuarded, true);
     }
 
     @Override
     public <V> DefaultUpdateStep<T> set(Field<V> field, Field<V> other) {
         List<Assignment> next = new ArrayList<>(assignments);
         next.add(new Assignment(field.name(), other.name(), List.of()));
-        return new DefaultUpdateStep<>(table, source, next, condition);
+        return new DefaultUpdateStep<>(table, source, next, condition, versionGuarded, true);
     }
 
     @Override
     public <N extends Number> DefaultUpdateStep<T> increment(Field<N> field, N delta) {
         List<Assignment> next = new ArrayList<>(assignments);
         next.add(new Assignment(field.name(), field.name() + " + ?", List.of(field.toSqlValue(delta))));
-        return new DefaultUpdateStep<>(table, source, next, condition);
+        return new DefaultUpdateStep<>(table, source, next, condition, versionGuarded, true);
     }
 
     @Override
     public DefaultUpdateStep<T> where(Condition condition) {
-        return new DefaultUpdateStep<>(table, source, assignments, this.condition.and(condition));
+        return new DefaultUpdateStep<>(table, source, assignments, this.condition.and(condition), versionGuarded,
+                hasRealAssignment);
+    }
+
+    @Override
+    public <V> DefaultUpdateStep<T> whereVersion(Field<V> field, V expectedVersion) {
+        List<Assignment> next = new ArrayList<>(assignments);
+        next.add(new Assignment(field.name(), field.name() + " + 1", List.of()));
+        return new DefaultUpdateStep<>(table, source, next, condition.and(field.eq(expectedVersion)), true,
+                hasRealAssignment);
     }
 
     @Override
     public int execute() throws SQLException {
         requireAssignments();
         Connection connection = source.acquire();
+        int affected;
         try {
             try (PreparedStatement statement = connection.prepareStatement(updateQuery())) {
                 bindAssignments(statement);
-                return statement.executeUpdate();
+                affected = statement.executeUpdate();
             }
         } catch (SQLException e) {
             throw DataAccessException.translate(e);
         } finally {
             source.release(connection);
         }
+        if (versionGuarded && affected == 0) {
+            throw new OptimisticLockException(table.name());
+        }
+        return affected;
     }
 
     @Override
     public List<T> updateAndReturn() throws SQLException {
         requireAssignments();
         Connection connection = source.acquire();
+        List<T> results;
         try {
             try (PreparedStatement statement = connection.prepareStatement(updateQuery() + " RETURNING *")) {
                 bindAssignments(statement);
                 try (ResultSet rows = statement.executeQuery()) {
-                    List<T> results = new ArrayList<>();
+                    results = new ArrayList<>();
                     while (rows.next()) {
                         results.add(table.fromRow(rows));
                     }
-                    return results;
                 }
             }
         } catch (SQLException e) {
@@ -102,11 +121,17 @@ public final class DefaultUpdateStep<T> implements ReturningUpdateStep<T> {
         } finally {
             source.release(connection);
         }
+        if (versionGuarded && results.isEmpty()) {
+            throw new OptimisticLockException(table.name());
+        }
+        return results;
     }
 
     private void requireAssignments() {
-        if (assignments.isEmpty()) {
-            throw new IllegalStateException("UPDATE [" + table.name() + "] requires at least one set(...) call.");
+        if (!hasRealAssignment) {
+            throw new IllegalStateException(
+                    "UPDATE [" + table.name() + "] requires at least one set(...)/increment(...) call — "
+                            + "whereVersion(...) alone doesn't count.");
         }
     }
 

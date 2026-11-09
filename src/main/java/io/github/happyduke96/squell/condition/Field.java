@@ -190,10 +190,8 @@ public final class Field<T> {
         return literal.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
-    /// A copy of this field prefixed with a table alias, e.g. `id().qualifiedBy("p")` reads as
-    /// `p.id` — lets `eqField` compare the same column from two aliases of the same table.
-    /// `alias` is written straight into the SQL text with no escaping — pass only a literal you
-    /// write in code, never a runtime/user-supplied string.
+    /// A copy prefixed with a table alias (`id().qualifiedBy("p")` reads `p.id`). `alias` goes into
+    /// the SQL unescaped — literals only, never user input.
     public Field<T> qualifiedBy(String alias) {
         return new Field<>(alias + "." + name, type, constraints, converter);
     }

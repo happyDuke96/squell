@@ -12,10 +12,13 @@ import io.github.happyduke96.squell.converter.LocalDateTimeConverter;
 import io.github.happyduke96.squell.converter.LocalTimeConverter;
 import io.github.happyduke96.squell.converter.OffsetDateTimeConverter;
 import io.github.happyduke96.squell.converter.ZonedDateTimeConverter;
+import io.github.happyduke96.squell.exception.OptimisticLockException;
 import io.github.happyduke96.squell.exception.PostgresDeadlockException;
 import io.github.happyduke96.squell.exception.PostgresLockNotAvailableException;
 import io.github.happyduke96.squell.execution.PostgresClient;
 import io.github.happyduke96.squell.internal.DialectVerifier;
+import io.github.happyduke96.squell.Document;
+import io.github.happyduke96.squell.DocumentTable;
 import io.github.happyduke96.squell.Ticket;
 import io.github.happyduke96.squell.TicketTable;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -46,6 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.expectThrows;
 
@@ -107,6 +111,13 @@ public class PostgresIntegrationTest {
                     CREATE TABLE tickets (
                         id BIGSERIAL PRIMARY KEY,
                         label VARCHAR NOT NULL
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE documents (
+                        id UUID PRIMARY KEY,
+                        version INT NOT NULL DEFAULT 0,
+                        title VARCHAR NOT NULL
                     )
                     """);
         }
@@ -659,15 +670,113 @@ public class PostgresIntegrationTest {
                 .values(draft)
                 .execute();
 
-        Ticket first = client.select(tickets).fetch().getFirst();
+        Ticket first = client.select(tickets)
+                .fetch()
+                .getFirst();
         assertTrue(first.id() > 0);
 
         client.insert(tickets)
                 .values(tickets.create("second contact"))
                 .execute();
 
-        long maxId = client.select(tickets).fetch().stream().mapToLong(Ticket::id).max().orElseThrow();
+        long maxId = client.select(tickets)
+                .fetch()
+                .stream()
+                .mapToLong(Ticket::id)
+                .max()
+                .orElseThrow();
         assertTrue(maxId > first.id(), "BIGSERIAL must keep incrementing across inserts");
+    }
+
+    @Test
+    public void whereVersionGuardsAgainstAConcurrentUpdateOnARealPostgres() throws SQLException {
+        DocumentTable documents = new DocumentTable();
+        UUID id = UUID.randomUUID();
+        client.insert(documents)
+                .values(documents.create(id, "draft"))
+                .execute();
+
+        Document draft = client.select(documents)
+                .where(documents.id().eq(id))
+                .fetch()
+                .getFirst();
+        assertEquals(draft.version(), 0);
+
+        int affected = client.update(documents)
+                .set(documents.title(), "final")
+                .where(documents.id().eq(id))
+                .whereVersion(documents.version(), draft.version())
+                .execute();
+        assertEquals(affected, 1);
+
+        Document updated = client.select(documents)
+                .where(documents.id().eq(id))
+                .fetch()
+                .getFirst();
+        assertEquals(updated.title(), "final");
+        assertEquals(updated.version(), 1);
+
+        expectThrows(OptimisticLockException.class, () -> client.update(documents)
+                .set(documents.title(), "stale write")
+                .where(documents.id().eq(id))
+                .whereVersion(documents.version(), draft.version())
+                .execute());
+    }
+
+    @Test
+    public void updateAndReturnPreciselyForgetsOnlyTheAffectedRowOnARealPostgres() throws SQLException {
+        DocumentTable documents = new DocumentTable();
+        UUID id = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        client.insert(documents)
+                .values(documents.create(id, "draft"))
+                .execute();
+        client.insert(documents)
+                .values(documents.create(otherId, "other draft"))
+                .execute();
+
+        client.transactionWithoutResult(tx -> {
+            tx.findCached(documents, id).orElseThrow();
+            Document cachedOther = tx.findCached(documents, otherId).orElseThrow();
+
+            tx.update(documents)
+                    .set(documents.title(), "updated")
+                    .where(documents.id().eq(id))
+                    .updateAndReturn();
+
+            Document afterUpdate = tx.findCached(documents, id).orElseThrow();
+            assertEquals(afterUpdate.title(), "updated", "the affected row's cache entry must be forgotten");
+
+            Document stillCachedOther = tx.findCached(documents, otherId).orElseThrow();
+            assertSame(stillCachedOther, cachedOther, "an unrelated row must survive precise invalidation");
+        });
+    }
+
+    @Test
+    public void deleteAndReturnPreciselyForgetsOnlyTheAffectedRowOnARealPostgres() throws SQLException {
+        DocumentTable documents = new DocumentTable();
+        UUID id = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        client.insert(documents)
+                .values(documents.create(id, "draft"))
+                .execute();
+        client.insert(documents)
+                .values(documents.create(otherId, "other draft"))
+                .execute();
+
+        client.transactionWithoutResult(tx -> {
+            tx.findCached(documents, id).orElseThrow();
+            Document cachedOther = tx.findCached(documents, otherId).orElseThrow();
+
+            tx.delete(documents)
+                    .where(documents.id().eq(id))
+                    .deleteAndReturn();
+
+            assertTrue(tx.findCached(documents, id).isEmpty(), "the deleted row's cache entry must be forgotten");
+
+            Document stillCachedOther = tx.findCached(documents, otherId).orElseThrow();
+            assertSame(stillCachedOther, cachedOther, "an unrelated row must survive precise invalidation");
+        });
     }
 
     private static void awaitUninterruptibly(CountDownLatch latch) {
