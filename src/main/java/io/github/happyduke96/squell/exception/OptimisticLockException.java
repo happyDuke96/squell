@@ -2,8 +2,12 @@ package io.github.happyduke96.squell.exception;
 
 import java.sql.SQLException;
 
-/// Thrown by `UpdateStep#execute` when a `whereVersion` guard matched no row — someone else
-/// updated it first, instead of the write silently doing nothing.
+/**
+ * Thrown by {@code UpdateStep#execute} when a {@code whereVersion} guard matches no row, meaning
+ * another transaction updated it first.
+ *
+ * @since 0.3.0
+ */
 public final class OptimisticLockException extends SQLException {
 
     public OptimisticLockException(String tableName) {

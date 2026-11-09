@@ -8,9 +8,12 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/// Routes a field through a `Converter` on the way to/from the column. Naming a class with a
-/// no-arg constructor here (instead of leaving the default) lets the generated `Table` build it
-/// itself, so callers don't have to pass converter instances in.
+/**
+ * Routes a field through a {@code Converter} to and from its column.
+ *
+ * <p>Naming a converter class with a no-arg constructor lets the generated table instantiate it
+ * itself.
+ */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.SOURCE)
 public @interface Convert {

@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-/// The negation of `ILike` — see it for why `LOWER(...)` instead of a dialect-specific operator.
+/** The negation of {@link ILike}. */
 public final class NotILike implements Condition {
 
     private final Field<?> field;

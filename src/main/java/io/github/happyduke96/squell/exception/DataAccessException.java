@@ -2,8 +2,12 @@ package io.github.happyduke96.squell.exception;
 
 import java.sql.SQLException;
 
-/// A `SQLException` translated to a specific subtype by SQLSTATE (`translate`), with a `retryable`
-/// flag — e.g. `DuplicateKeyException` for a unique-constraint violation.
+/**
+ * A {@code SQLException} translated by SQLSTATE into a specific subtype, such as
+ * {@code DuplicateKeyException} for a unique-constraint violation.
+ *
+ * <p>The {@code retryable} flag marks failures worth retrying.
+ */
 public class DataAccessException extends SQLException {
 
     private final boolean retryable;
@@ -21,12 +25,13 @@ public class DataAccessException extends SQLException {
         return retryable;
     }
 
-    /// MySQL's `ER_LOCK_NOWAIT` — a row already locked by another transaction, thrown by
-    /// `forUpdateNoWait()`.
+    /** MySQL {@code ER_LOCK_NOWAIT}: the row is already locked by another transaction. */
     private static final int MYSQL_LOCK_NOWAIT = 3572;
 
-    /// MySQL's `ER_LOCK_DEADLOCK` — sharing SQLSTATE `40001` with plain lock-wait-timeout, so it
-    /// needs the vendor error code to tell them apart.
+    /**
+     * MySQL {@code ER_LOCK_DEADLOCK}; it shares SQLSTATE 40001 with a lock-wait timeout, so the
+     * vendor code tells them apart.
+     */
     private static final int MYSQL_DEADLOCK = 1213;
 
     public static DataAccessException translate(SQLException cause) {

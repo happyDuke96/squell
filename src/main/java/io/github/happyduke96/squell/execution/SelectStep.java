@@ -31,9 +31,15 @@ public interface SelectStep<T> {
 
     List<T> fetch() throws SQLException;
 
-    /// A lazy `Stream` over the result set, for rows too many to hold in memory at once. The
-    /// returned `Stream` holds the `Connection`/`ResultSet` open — always consume it inside
-    /// try-with-resources, or the connection leaks.
+    /**
+     * Returns a lazy stream over the result set, for results too large to hold in memory.
+     *
+     * <p>The stream keeps the connection and result set open: consume it in try-with-resources, or
+     * the connection leaks.
+     *
+     * @return the stream of rows
+     * @throws SQLException if the query fails
+     */
     Stream<T> fetchStream() throws SQLException;
 
     Optional<T> fetchOne() throws SQLException;
@@ -42,14 +48,26 @@ public interface SelectStep<T> {
 
     long count() throws SQLException;
 
-    /// Fetches this page's rows and the total row count across every page, in one call — the
-    /// common offset-pagination pattern of a `LIMIT`/`OFFSET` fetch plus a separate `count()`,
-    /// bundled so callers can't forget the total. `pageNumber` is 0-based.
+    /**
+     * Fetches one page of rows together with the total row count.
+     *
+     * @param pageNumber the 0-based page index
+     * @param pageSize the rows per page
+     * @return the page
+     * @throws SQLException if the query fails
+     */
     Page<T> fetchPage(int pageNumber, int pageSize) throws SQLException;
 
-    /// Fetches up to `limit` rows without `COUNT(*)` or `OFFSET`, either of which degrades on a
-    /// large table — pair with `where(cursorField.gt(lastSeenValue))` and `orderBy(cursorField)`
-    /// for keyset pagination that stays fast at any depth.
+    /**
+     * Fetches up to {@code limit} rows without {@code COUNT(*)} or {@code OFFSET}.
+     *
+     * <p>Combine it with {@code where(cursor.gt(lastSeen))} and {@code orderBy(cursor)} for keyset
+     * pagination that stays fast at any depth.
+     *
+     * @param limit the maximum number of rows
+     * @return the slice
+     * @throws SQLException if the query fails
+     */
     Slice<T> fetchSlice(int limit) throws SQLException;
 
     <V> Optional<V> min(Field<V> field) throws SQLException;

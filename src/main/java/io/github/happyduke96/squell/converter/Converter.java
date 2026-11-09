@@ -1,7 +1,14 @@
 package io.github.happyduke96.squell.converter;
 
-/// Converts an entity field of type `T` to/from the JDBC value `S` stored in the column. Implement
-/// this for a custom column type and reference it with `@Convert`.
+/**
+ * Converts an entity field of type {@code T} to and from the JDBC value {@code S} stored in the
+ * column.
+ *
+ * <p>Implement it for a custom column type and reference it with {@code @Convert}.
+ *
+ * @param <T> the entity field type
+ * @param <S> the JDBC value type
+ */
 public interface Converter<T, S> {
 
     S toSql(T value);

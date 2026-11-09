@@ -2,8 +2,15 @@ package io.github.happyduke96.squell.execution;
 
 import java.util.List;
 
-/// One page of an offset-paginated result: the matching rows for that page plus the total count
-/// of rows across every page, fetched together by [SelectStep#fetchPage].
+/**
+ * One page of an offset-paginated result, produced by {@code SelectStep#fetchPage}.
+ *
+ * @param content the rows of this page
+ * @param totalElements the row count across all pages
+ * @param pageNumber the 0-based page index
+ * @param pageSize the requested page size
+ * @param <T> the entity type
+ */
 public record Page<T>(List<T> content, long totalElements, int pageNumber, int pageSize) {
 
     public boolean hasNext() {

@@ -20,8 +20,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
-/// Entry point for MySQL: `select`/`insert`/`update`/`delete`/`sql`, plus `validateSchema` and
-/// `transaction`. Verifies at construction that `dataSource` is actually MySQL (or H2 for tests).
+/**
+ * Entry point for MySQL: query steps, raw SQL, schema validation and transactions.
+ *
+ * <p>It verifies at construction that the data source is MySQL (H2 is accepted for tests).
+ */
 public final class MySqlClient {
 
     private final DefaultClient delegate;
@@ -47,8 +50,19 @@ public final class MySqlClient {
         return delegate.delete(table);
     }
 
-    /// One `IN` query for the children of several parents, grouped by `childKey`; parents with
-    /// no children are absent from the map.
+    /**
+     * Loads the children of several parents with a single {@code IN} query.
+     *
+     * @param parentIds the parent keys; an empty collection skips the query
+     * @param childTable the table of the child entity
+     * @param childForeignKey the child column that references the parent key
+     * @param childKey extracts the parent key from a child, used for grouping
+     * @param <K> the parent key type
+     * @param <C> the child entity type
+     * @return the children grouped by parent key; parents without children are absent
+     * @throws SQLException if the query fails
+     * @since 0.3.0
+     */
     public <K, C> Map<K, List<C>> fetchRelated(Collection<K> parentIds, Table<C> childTable,
             Field<K> childForeignKey, Function<C, K> childKey) throws SQLException {
         return delegate.fetchRelated(parentIds, childTable, childForeignKey, childKey);
@@ -62,8 +76,17 @@ public final class MySqlClient {
         return delegate.updateBatch(table, entities, matchField);
     }
 
-    /// Raw SQL, bound positionally to its `?` placeholders — `sql` is not escaped or
-    /// validated; never build it by concatenating untrusted input.
+    /**
+     * Creates a raw SQL statement; {@code params} are bound positionally to the {@code ?}
+     * placeholders.
+     *
+     * <p>{@code sql} is neither escaped nor validated: build it from literals, never from untrusted
+     * input.
+     *
+     * @param sql the SQL text
+     * @param params the values for the placeholders
+     * @return a step that runs the statement
+     */
     public RawStep sql(@Language("SQL") String sql, Object... params) {
         return delegate.sql(sql, params);
     }
@@ -108,9 +131,18 @@ public final class MySqlClient {
         });
     }
 
-    /// Retries `work` in a fresh `transaction(...)` while it fails with a retryable
-    /// `DataAccessException` (a deadlock, a `forUpdateNoWait()` conflict, a serialization
-    /// failure...), up to `maxAttempts` attempts, waiting `delayBetweenAttempts` between them.
+    /**
+     * Runs {@code work} in a new transaction, retrying while it fails with a retryable
+     * {@code DataAccessException} (a deadlock, a {@code forUpdateNoWait()} conflict, a
+     * serialization failure).
+     *
+     * @param maxAttempts the total number of attempts, including the first
+     * @param delayBetweenAttempts the pause between attempts
+     * @param work the unit of work
+     * @param <R> the result type
+     * @return the result of the first successful attempt
+     * @throws SQLException if every attempt fails or {@code work} throws a non-retryable exception
+     */
     public <R> R transactionWithRetry(int maxAttempts, Duration delayBetweenAttempts,
             TransactionWork<Transaction, R> work) throws SQLException {
         return delegate.transactionWithRetry(maxAttempts, delayBetweenAttempts,
@@ -130,8 +162,15 @@ public final class MySqlClient {
             this.delegate = delegate;
         }
 
-        /// REQUIRED — runs `work` against this same transaction; the enclosing `transaction(...)`
-        /// call still owns the commit/rollback boundary.
+        /**
+         * Runs {@code work} in this same transaction ({@code REQUIRED}); the enclosing
+         * {@code transaction(...)} call still owns commit and rollback.
+         *
+         * @param work the unit of work
+         * @param <R> the result type
+         * @return the result of {@code work}
+         * @throws SQLException if {@code work} fails
+         */
         public <R> R transaction(TransactionWork<Transaction, R> work) throws SQLException {
             return delegate.transaction(defaultTx -> work.run(new Transaction(defaultTx)));
         }
@@ -143,8 +182,15 @@ public final class MySqlClient {
             });
         }
 
-        /// REQUIRES_NEW — runs `work` in its own transaction on a separate connection, committed
-        /// or rolled back independently of this one.
+        /**
+         * Runs {@code work} in its own transaction on a separate connection ({@code REQUIRES_NEW}),
+         * committed or rolled back independently of this one.
+         *
+         * @param work the unit of work
+         * @param <R> the result type
+         * @return the result of {@code work}
+         * @throws SQLException if {@code work} fails
+         */
         public <R> R transactionRequiringNew(TransactionWork<Transaction, R> work) throws SQLException {
             return delegate.transactionRequiringNew(defaultTx -> work.run(new Transaction(defaultTx)));
         }
@@ -169,8 +215,15 @@ public final class MySqlClient {
             });
         }
 
-        /// NESTED — runs `work` inside a `SAVEPOINT` on this same transaction: its writes roll
-        /// back on failure without unwinding the enclosing transaction.
+        /**
+         * Runs {@code work} inside a {@code SAVEPOINT} of this transaction ({@code NESTED}); on
+         * failure only its writes roll back.
+         *
+         * @param work the unit of work
+         * @param <R> the result type
+         * @return the result of {@code work}
+         * @throws SQLException if {@code work} fails
+         */
         public <R> R transactionNested(TransactionWork<Transaction, R> work) throws SQLException {
             return delegate.transactionNested(defaultTx -> work.run(new Transaction(defaultTx)));
         }
@@ -198,26 +251,66 @@ public final class MySqlClient {
             return delegate.delete(table);
         }
 
-        /// One `IN` query for the children of several parents, grouped by `childKey`; parents with
-        /// no children are absent from the map.
+        /**
+         * Loads the children of several parents with a single {@code IN} query.
+         *
+         * @param parentIds the parent keys; an empty collection skips the query
+         * @param childTable the table of the child entity
+         * @param childForeignKey the child column that references the parent key
+         * @param childKey extracts the parent key from a child, used for grouping
+         * @param <K> the parent key type
+         * @param <C> the child entity type
+         * @return the children grouped by parent key; parents without children are absent
+         * @throws SQLException if the query fails
+         * @since 0.3.0
+         */
         public <K, C> Map<K, List<C>> fetchRelated(Collection<K> parentIds, Table<C> childTable,
                 Field<K> childForeignKey, Function<C, K> childKey) throws SQLException {
             return delegate.fetchRelated(parentIds, childTable, childForeignKey, childKey);
         }
 
-        /// Fetch by id, cached for this transaction (misses too). `update`/`delete` evict; `insert` and
-        /// raw `sql` need `forget`.
+        /**
+         * Finds an entity by id, caching the result (a miss too) for the lifetime of this
+         * transaction.
+         *
+         * <p>{@code update} and {@code delete} on this transaction evict the entry; after
+         * {@code insert} or raw {@code sql} call {@link #forget}.
+         *
+         * @param table the table to look in
+         * @param id the primary key
+         * @param <T> the entity type
+         * @param <ID> the primary key type
+         * @return the entity, or empty if there is no such row
+         * @throws SQLException if the query fails
+         * @since 0.3.0
+         */
         public <T, ID> Optional<T> findCached(DefaultTable<T, ID> table, ID id) throws SQLException {
             return delegate.findCached(table, id);
         }
 
-        /// Evicts a `findCached` entry after a write that bypasses `update`/`delete`.
+        /**
+         * Evicts a {@link #findCached} entry; needed only after a write that bypasses
+         * {@code update} and {@code delete}.
+         *
+         * @param table the table the entry belongs to
+         * @param id the primary key
+         * @since 0.3.0
+         */
         public void forget(Table<?> table, Object id) {
             delegate.forget(table, id);
         }
 
-        /// Raw SQL, bound positionally to its `?` placeholders — `sql` is not escaped or
-        /// validated; never build it by concatenating untrusted input.
+        /**
+         * Creates a raw SQL statement; {@code params} are bound positionally to the {@code ?}
+         * placeholders.
+         *
+         * <p>{@code sql} is neither escaped nor validated: build it from literals, never from
+         * untrusted input.
+         *
+         * @param sql the SQL text
+         * @param params the values for the placeholders
+         * @return a step that runs the statement
+         */
         public RawStep sql(@Language("SQL") String sql, Object... params) {
             return delegate.sql(sql, params);
         }

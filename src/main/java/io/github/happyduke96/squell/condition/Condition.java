@@ -2,8 +2,12 @@ package io.github.happyduke96.squell.condition;
 
 import java.util.List;
 
-/// A `WHERE`/`HAVING` predicate — its SQL text plus the positional values it binds. Built via
-/// `Field`'s comparison methods (`eq`, `gt`, `like`, ...), then composed with `and`/`or`/`negate`.
+/**
+ * A {@code WHERE} or {@code HAVING} predicate: its SQL text and the positional values it binds.
+ *
+ * <p>Built from the comparison methods of {@link Field} ({@code eq}, {@code gt}, {@code like}...)
+ * and composed with {@code and}, {@code or} and {@code negate}.
+ */
 public sealed interface Condition permits
         Eq, Ne, Gt, Lt, Ge, Le,
         Between, In, NotIn,

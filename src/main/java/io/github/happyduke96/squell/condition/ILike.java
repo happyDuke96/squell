@@ -4,9 +4,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-/// Case-insensitive `LIKE`, portable across dialects: lowers the column via `LOWER(...)` and
-/// lowers `pattern` in Java (`Locale.ROOT`) before binding, rather than relying on a
-/// dialect-specific operator like Postgres's `ILIKE` or a database's default collation.
+/**
+ * Case-insensitive {@code LIKE} that is portable across dialects.
+ *
+ * <p>It lowers the column with {@code LOWER(...)} and the pattern in Java ({@code Locale.ROOT})
+ * instead of relying on a dialect operator such as Postgres {@code ILIKE}.
+ */
 public final class ILike implements Condition {
 
     private final Field<?> field;

@@ -10,8 +10,13 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/// Base for a `Converter` to a Postgres array column (`text[]`, `int4[]`, ...); subclass and
-/// implement `pgType`/`serializeElement`/`deserializeElement` for the element type.
+/**
+ * Base class for a converter to a Postgres array column ({@code text[]}, {@code int4[]}...).
+ *
+ * <p>Subclasses implement {@code pgType}, {@code serializeElement} and {@code deserializeElement}.
+ *
+ * @param <T> the element type
+ */
 public abstract class AbstractArrayConverter<T> implements Converter<List<T>, Object> {
 
     private static final Pattern NEEDS_QUOTING = Pattern.compile("[{},\"\\\\\\s]");

@@ -20,8 +20,18 @@ public interface UpdateStep<T> {
         return test ? where(condition.get()) : this;
     }
 
-    /// Guards the update with `WHERE field = expectedVersion`, auto-increments `field`, and throws
-    /// `OptimisticLockException` instead of returning `0` when no row matches.
+    /**
+     * Guards the update with {@code WHERE field = expectedVersion} and increments {@code field}.
+     *
+     * <p>If no row matches, {@code execute()} throws {@code OptimisticLockException} instead of
+     * returning {@code 0}.
+     *
+     * @param field the {@code @Version} field
+     * @param expectedVersion the version read earlier
+     * @param <V> the version type
+     * @return this step with the guard
+     * @since 0.3.0
+     */
     <V> UpdateStep<T> whereVersion(Field<V> field, V expectedVersion);
 
     int execute() throws SQLException;

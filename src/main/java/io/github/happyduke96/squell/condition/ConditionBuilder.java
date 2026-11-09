@@ -6,7 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-/// Accumulates optional filters into one `Condition`, skipping null/empty values.
+/**
+ * Accumulates optional filters into one {@link Condition}, skipping {@code null} and empty values.
+ */
 public final class ConditionBuilder {
 
     private final List<Condition> conditions;

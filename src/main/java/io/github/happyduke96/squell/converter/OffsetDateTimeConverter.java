@@ -6,9 +6,13 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 
-/// Converts `OffsetDateTime` for binding. No dialect tested preserves an offset on read, only the
-/// instant — every value comes back at `readOffset` (`UTC` by default). Store the original offset
-/// yourself in a separate column if you need it.
+/**
+ * Converts {@code OffsetDateTime} for binding.
+ *
+ * <p>No tested dialect preserves the offset, only the instant, so every value is read back at
+ * {@code readOffset} ({@code UTC} by default). Store the original offset in a separate column if
+ * you need it.
+ */
 public final class OffsetDateTimeConverter implements Converter<OffsetDateTime, Object> {
 
     private final ZoneOffset readOffset;

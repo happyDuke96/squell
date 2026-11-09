@@ -5,8 +5,10 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/// On a `package-info.java`, generates a `Tables` class listing every entity in the package whose
-/// `Table` has a no-arg constructor.
+/**
+ * On a {@code package-info.java}: generates a {@code Tables} class listing every entity in the
+ * package whose table has a no-arg constructor.
+ */
 @Target(ElementType.PACKAGE)
 @Retention(RetentionPolicy.SOURCE)
 public @interface GenerateTableRegistry {

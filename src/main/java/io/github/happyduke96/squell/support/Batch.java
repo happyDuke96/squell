@@ -8,7 +8,13 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/// Groups a flat list of children under their parents by a shared key.
+/**
+ * Groups a flat list of children under their parents by a shared key.
+ *
+ * @param <P> the parent type
+ * @param <K> the key type
+ * @param <C> the child type
+ */
 public final class Batch<P, K, C> {
 
     private final List<P> parents;

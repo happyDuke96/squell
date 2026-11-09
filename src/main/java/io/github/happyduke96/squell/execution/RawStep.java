@@ -14,9 +14,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/// Runs a raw SQL statement — `sql` as-is, `params` bound positionally to its `?` placeholders.
-/// `sql` itself is never escaped or validated beyond counting placeholders — never build it by
-/// concatenating untrusted input; only the bound `params` are safe from injection.
+/**
+ * Runs a raw SQL statement: {@code sql} as given, {@code params} bound positionally to its
+ * {@code ?} placeholders.
+ *
+ * <p>{@code sql} is only checked for placeholder count. Build it from literals, never from
+ * untrusted input; only the bound params are safe from injection.
+ */
 public final class RawStep {
 
     private static final System.Logger LOGGER = System.getLogger(RawStep.class.getName());

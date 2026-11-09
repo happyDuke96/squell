@@ -5,8 +5,14 @@ import org.postgresql.util.PGobject;
 
 import java.sql.SQLException;
 
-/// Base for a `Converter` to a Postgres range column (`int4range`, ...); subclass and
-/// implement `pgType`/`serializeBound`/`deserializeBound`. See `IntRangeConverter`.
+/**
+ * Base class for a converter to a Postgres range column ({@code int4range}...).
+ *
+ * <p>Subclasses implement {@code pgType}, {@code serializeBound} and {@code deserializeBound}; see
+ * {@code IntRangeConverter}.
+ *
+ * @param <T> the bound type
+ */
 public abstract class AbstractRangeConverter<T> implements Converter<Range<T>, PGobject> {
 
     @Override

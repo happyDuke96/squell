@@ -7,8 +7,14 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-/// A generated mapping between an `@Entity` record and its table: its fields, how to build a row
-/// from a `ResultSet`, and which fields are actually written on insert (generated ones are not).
+/**
+ * A generated mapping between an {@code @Entity} and its table.
+ *
+ * <p>It knows the table's fields, builds an entity from a {@code ResultSet}, and writes every field
+ * except generated ones on insert. Being a {@link RowMapper}, it maps whole rows of raw SQL too.
+ *
+ * @param <T> the entity type
+ */
 public interface Table<T> extends RowMapper<T> {
 
     String name();
@@ -46,8 +52,15 @@ public interface Table<T> extends RowMapper<T> {
         return fromRow(row);
     }
 
-    /// Aliases this table. `alias` is written straight into the SQL text with no escaping — pass
-    /// only a literal you write in code (`posts.as("p")`), never a runtime/user-supplied string.
+    /**
+     * Returns this table under an alias.
+     *
+     * <p>{@code alias} is written into the SQL unescaped: pass a literal such as
+     * {@code posts.as("p")}, never user input.
+     *
+     * @param alias the table alias
+     * @return the aliased table
+     */
     default AliasedTable<T> as(String alias) {
         return new AliasedTable<>(this, alias);
     }

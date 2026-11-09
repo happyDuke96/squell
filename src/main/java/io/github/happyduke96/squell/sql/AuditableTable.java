@@ -5,8 +5,14 @@ import io.github.happyduke96.squell.condition.Field;
 
 import java.time.Instant;
 
-/// Opt-in for a `Table` whose entity tracks `createdAt`/`updatedAt`; not generated automatically —
-/// implement it by hand on a generated `Table` that has both columns.
+/**
+ * Opt-in for a table whose entity tracks {@code createdAt} and {@code updatedAt}.
+ *
+ * <p>Not generated: implement it by hand on a generated table that has both columns.
+ *
+ * @param <T> the entity type
+ * @param <ID> the primary key type
+ */
 public interface AuditableTable<T, ID> extends DefaultTable<T, ID> {
 
     Field<Instant> createdAt();

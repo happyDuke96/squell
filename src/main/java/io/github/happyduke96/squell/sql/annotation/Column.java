@@ -5,7 +5,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/// Overrides the column name and/or declares constraints checked by `Client#validateSchema`.
+/** Overrides the column name and declares constraints checked by {@code validateSchema}. */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.SOURCE)
 public @interface Column {

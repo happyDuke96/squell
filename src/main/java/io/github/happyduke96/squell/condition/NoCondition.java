@@ -2,8 +2,12 @@ package io.github.happyduke96.squell.condition;
 
 import java.util.List;
 
-/// Null Object for `Condition` — empty SQL, no values; `and`/`or` with it just return the other
-/// side. Returned by `Field`'s `xIf(false, ...)` methods and used as the seed in `ConditionBuilder`.
+/**
+ * Null Object for {@link Condition}: empty SQL and no values.
+ *
+ * <p>{@code and} and {@code or} with it return the other side. It is what the
+ * {@code xIf(false, ...)} methods of {@link Field} return.
+ */
 public final class NoCondition implements Condition {
 
     public static final NoCondition INSTANCE = new NoCondition();

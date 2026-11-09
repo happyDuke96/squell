@@ -3,8 +3,11 @@ package io.github.happyduke96.squell.converter;
 import java.sql.Time;
 import java.time.LocalTime;
 
-/// Converts `LocalTime` <-> `java.sql.Time` for binding — a hint-less `getObject` returns `Time`,
-/// not `LocalTime`. `Time` also has no sub-second precision, so nanos are lost either way.
+/**
+ * Converts {@code LocalTime} to and from {@code java.sql.Time} for binding.
+ *
+ * <p>{@code Time} has no sub-second precision, so nanoseconds are lost.
+ */
 public final class LocalTimeConverter implements Converter<LocalTime, Time> {
 
     @Override

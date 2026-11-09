@@ -132,10 +132,16 @@ public final class EntityProcessor extends AbstractProcessor {
         return new EntityInfo(packageName, entityName, hasNoArgConstructor);
     }
 
-    /// Column names colliding with `Table#name()`/`#fields()`.
+    /** Column names that would collide with {@code Table#name()} and {@code Table#fields()}. */
     private static final Set<String> RESERVED_COLUMN_NAMES = Set.of("name", "fields");
 
-    /// Rejects entity shapes that would compile into broken generated code.
+    /**
+     * Rejects entity shapes that would generate code that does not compile.
+     *
+     * @param entityElement the annotated entity
+     * @param columns the entity's columns
+     * @return {@code true} if the entity is valid; each problem is reported on its element
+     */
     private boolean validate(TypeElement entityElement, List<ColumnModel> columns) {
         List<ColumnModel> idColumns = columns.stream().filter(ColumnModel::isId).toList();
         if (idColumns.size() > 1) {
@@ -473,8 +479,15 @@ public final class EntityProcessor extends AbstractProcessor {
                 .collect(Collectors.joining(SourceWriter.COMMA));
     }
 
-    /// A primitive can't hold `null` before insert, so it starts at zero instead (JPA/Hibernate
-    /// convention); a reference type starts at `null`.
+    /**
+     * Returns the literal a {@code @GeneratedValue} field holds before insert.
+     *
+     * <p>A primitive cannot be {@code null}, so it starts at zero; a reference type starts at
+     * {@code null}.
+     *
+     * @param accessorType the accessor's declared Java type
+     * @return the Java literal
+     */
     private static String generatedDefaultLiteral(String accessorType) {
         return switch (accessorType) {
             case "long" -> "0L";
@@ -487,7 +500,12 @@ public final class EntityProcessor extends AbstractProcessor {
         };
     }
 
-    /// Unlike a generated id, a version counter always has a value — `0`, even for a wrapper type.
+    /**
+     * Returns the literal a {@code @Version} field starts at: always zero, even for a wrapper type.
+     *
+     * @param accessorType the accessor's declared Java type
+     * @return the Java literal
+     */
     private static String versionDefaultLiteral(String accessorType) {
         return accessorType.equals("long") || accessorType.equals("java.lang.Long") ? "0L" : "0";
     }

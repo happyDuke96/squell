@@ -5,8 +5,12 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/// The database assigns this column's value; `create()` omits it. Declare the plain type — it's
-/// `0`/`false`/`null` until read back (`executeAndReturn()`, `select`); `Optional<...>` won't compile.
+/**
+ * Marks a column whose value the database assigns; {@code create()} omits it.
+ *
+ * <p>Declare the plain type: until read back the value is {@code 0} or {@code false} for a
+ * primitive and {@code null} otherwise. {@code Optional} is rejected at compile time.
+ */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.SOURCE)
 public @interface GeneratedValue {

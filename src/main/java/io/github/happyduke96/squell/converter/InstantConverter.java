@@ -5,8 +5,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
-/// Converts `Instant` <-> `Timestamp` for binding — pgjdbc can't infer a SQL type for a bare
-/// `Instant`. Reads accept `Timestamp` (Postgres) or `LocalDateTime` (MySQL).
+/**
+ * Converts {@code Instant} to and from {@code Timestamp} for binding.
+ *
+ * <p>pgjdbc cannot infer a SQL type for a bare {@code Instant}. Reads accept {@code Timestamp}
+ * (Postgres) or {@code LocalDateTime} (MySQL).
+ */
 public final class InstantConverter implements Converter<Instant, Object> {
 
     @Override

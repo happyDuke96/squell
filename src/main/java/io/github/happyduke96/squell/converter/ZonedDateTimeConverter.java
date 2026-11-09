@@ -5,9 +5,13 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
-/// Converts `ZonedDateTime` for binding — same missing-SQL-type issue as `Instant`. No dialect
-/// tested stores a zone id, only an instant — every value comes back at `readZone` (`UTC` by
-/// default). Store the original zone yourself in a separate column if you need it.
+/**
+ * Converts {@code ZonedDateTime} for binding.
+ *
+ * <p>No tested dialect stores a zone id, only the instant, so every value is read back at
+ * {@code readZone} ({@code UTC} by default). Store the original zone in a separate column if you
+ * need it.
+ */
 public final class ZonedDateTimeConverter implements Converter<ZonedDateTime, Object> {
 
     private final ZoneId readZone;

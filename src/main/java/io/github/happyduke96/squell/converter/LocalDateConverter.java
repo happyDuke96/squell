@@ -3,8 +3,11 @@ package io.github.happyduke96.squell.converter;
 import java.sql.Date;
 import java.time.LocalDate;
 
-/// Converts `LocalDate` <-> `java.sql.Date` for binding — a hint-less `getObject` returns `Date`,
-/// not `LocalDate`, on both dialects.
+/**
+ * Converts {@code LocalDate} to and from {@code java.sql.Date} for binding.
+ *
+ * <p>A hint-less {@code getObject} returns {@code Date}, not {@code LocalDate}, on both dialects.
+ */
 public final class LocalDateConverter implements Converter<LocalDate, Date> {
 
     @Override

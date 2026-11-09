@@ -3,8 +3,12 @@ package io.github.happyduke96.squell.converter;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 
-/// Converts `LocalDateTime` for binding — a hint-less `getObject` returns `Timestamp` on Postgres,
-/// `LocalDateTime` itself on MySQL; reads accept either.
+/**
+ * Converts {@code LocalDateTime} for binding.
+ *
+ * <p>A hint-less {@code getObject} returns {@code Timestamp} on Postgres and {@code LocalDateTime}
+ * on MySQL; reads accept either.
+ */
 public final class LocalDateTimeConverter implements Converter<LocalDateTime, Object> {
 
     @Override

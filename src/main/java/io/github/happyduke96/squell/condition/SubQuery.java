@@ -4,7 +4,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/// An embedded `SELECT`, for `Field#in(SubQuery)`/`notIn(SubQuery)` — from `SelectStep#subQuery`.
+/**
+ * An embedded {@code SELECT} for {@code Field#in(SubQuery)} and {@code notIn(SubQuery)}.
+ *
+ * <p>Created by {@code SelectStep#subQuery}.
+ *
+ * @param <T> the type of the selected column
+ */
 public final class SubQuery<T> {
 
     private final String sql;

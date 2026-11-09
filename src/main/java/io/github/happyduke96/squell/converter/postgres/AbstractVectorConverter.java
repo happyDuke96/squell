@@ -5,8 +5,13 @@ import org.postgresql.util.PGobject;
 
 import java.sql.SQLException;
 
-/// Base for a `Converter` to a Postgres `vector` column (pgvector); subclass and implement
-/// `serialize`/`deserialize`. See `VectorConverter`.
+/**
+ * Base class for a converter to a Postgres {@code vector} column (pgvector).
+ *
+ * <p>Subclasses implement {@code serialize} and {@code deserialize}; see {@code VectorConverter}.
+ *
+ * @param <T> the Java type
+ */
 public abstract class AbstractVectorConverter<T> implements Converter<T, PGobject> {
 
     @Override

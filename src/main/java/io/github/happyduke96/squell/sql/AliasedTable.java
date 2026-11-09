@@ -2,7 +2,13 @@ package io.github.happyduke96.squell.sql;
 
 import io.github.happyduke96.squell.condition.Field;
 
-/// A `Table` under an alias, for self-joins or joins on the same table twice — from `Table#as`.
+/**
+ * A {@link Table} under an alias, for self-joins or joining the same table twice.
+ *
+ * <p>Created by {@code Table#as}.
+ *
+ * @param <T> the entity type
+ */
 public final class AliasedTable<T> {
 
     private final Table<T> table;

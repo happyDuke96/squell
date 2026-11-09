@@ -7,7 +7,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
 
-/// A typed reference to a table column; builds `Condition`s (`eq`, `gt`, `like`, ...).
+/**
+ * A typed reference to a table column; its comparison methods build {@link Condition}s.
+ *
+ * @param <T> the column's Java type
+ */
 public final class Field<T> {
 
     private final String name;
@@ -131,8 +135,15 @@ public final class Field<T> {
         return new IsNotNull(this);
     }
 
-    /// `eq(value)` when `test` is true, a no-op `Condition` otherwise — for building a `WHERE`
-    /// clause where a filter only applies when its value was actually supplied.
+    /**
+     * Returns {@code eq(value)} when {@code test} is true, otherwise a {@link NoCondition}.
+     *
+     * <p>Use it for a {@code WHERE} filter that applies only when its value was supplied.
+     *
+     * @param test whether the filter applies
+     * @param value the value to compare with
+     * @return the condition
+     */
     public Condition eqIf(boolean test, T value) {
         return test ? eq(value) : NoCondition.INSTANCE;
     }
@@ -185,13 +196,26 @@ public final class Field<T> {
         return test ? notILike(pattern) : NoCondition.INSTANCE;
     }
 
-    /// Escapes `%`, `_`, and `\` in `literal` so it matches literally in `like`/`notLike`/`ilike`.
+    /**
+     * Escapes {@code %}, {@code _} and {@code \} so the literal matches literally in {@code like},
+     * {@code notLike} and {@code ilike}.
+     *
+     * @param literal the text to escape
+     * @return the escaped text
+     */
     public static String escapeLike(String literal) {
         return literal.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
-    /// A copy prefixed with a table alias (`id().qualifiedBy("p")` reads `p.id`). `alias` goes into
-    /// the SQL unescaped — literals only, never user input.
+    /**
+     * Returns a copy of this field prefixed with a table alias, so {@code id().qualifiedBy("p")}
+     * reads {@code p.id}.
+     *
+     * <p>{@code alias} is written into the SQL unescaped: pass a literal, never user input.
+     *
+     * @param alias the table alias
+     * @return the qualified field
+     */
     public Field<T> qualifiedBy(String alias) {
         return new Field<>(alias + "." + name, type, constraints, converter);
     }

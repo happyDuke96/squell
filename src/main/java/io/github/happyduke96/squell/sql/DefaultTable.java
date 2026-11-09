@@ -3,9 +3,15 @@ package io.github.happyduke96.squell.sql;
 import io.github.happyduke96.squell.condition.Condition;
 import io.github.happyduke96.squell.condition.Field;
 
-/// A `Table` with a primary key; implemented automatically for entities with an `@Id` field. An
-/// entity with no `@Id` (a join table, a composite key — squell doesn't model those) gets plain
-/// `Table<T>` instead, with no `id()`/`byId()`.
+/**
+ * A {@link Table} with a primary key, implemented automatically for entities with an {@code @Id}
+ * field.
+ *
+ * <p>Entities without one get a plain {@code Table} with no {@code id()} or {@code byId()}.
+ *
+ * @param <T> the entity type
+ * @param <ID> the primary key type
+ */
 public interface DefaultTable<T, ID> extends Table<T> {
 
     Field<ID> id();

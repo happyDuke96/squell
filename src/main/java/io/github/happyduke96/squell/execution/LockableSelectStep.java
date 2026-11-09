@@ -5,8 +5,12 @@ import io.github.happyduke96.squell.condition.Field;
 
 import java.util.function.Supplier;
 
-/// A `SelectStep` that also supports row locking — only where the dialect actually has
-/// `SELECT ... FOR UPDATE` (not `SqliteClient`).
+/**
+ * A {@link SelectStep} that supports row locking, for dialects with {@code SELECT ... FOR UPDATE}
+ * (not SQLite).
+ *
+ * @param <T> the entity type
+ */
 public interface LockableSelectStep<T> extends SelectStep<T> {
 
     @Override
@@ -32,19 +36,34 @@ public interface LockableSelectStep<T> extends SelectStep<T> {
     @Override
     LockableSelectStep<T> distinct();
 
-    /// `SELECT ... FOR UPDATE` — locks the matched rows until the transaction commits or rolls
-    /// back, so no other transaction can update or delete them concurrently.
+    /**
+     * Appends {@code FOR UPDATE}: locks the matched rows until the transaction ends.
+     *
+     * @return this step with the lock clause
+     */
     SelectStep<T> forUpdate();
 
-    /// `SELECT ... FOR UPDATE SKIP LOCKED` — like `forUpdate`, but rows already locked by
-    /// another transaction are silently excluded instead of blocking.
+    /**
+     * Appends {@code FOR UPDATE SKIP LOCKED}: like {@link #forUpdate()}, but rows locked by another
+     * transaction are skipped instead of waited for.
+     *
+     * @return this step with the lock clause
+     */
     SelectStep<T> forUpdateSkipLocked();
 
-    /// `SELECT ... FOR UPDATE NOWAIT` — like `forUpdate`, but fails immediately with an error
-    /// instead of blocking when a matched row is already locked by another transaction.
+    /**
+     * Appends {@code FOR UPDATE NOWAIT}: like {@link #forUpdate()}, but fails immediately when a
+     * matched row is locked by another transaction.
+     *
+     * @return this step with the lock clause
+     */
     SelectStep<T> forUpdateNoWait();
 
-    /// `SELECT ... FOR SHARE` — a shared read lock: blocks other transactions from updating or
-    /// deleting the matched rows, but not from also taking a `FOR SHARE` lock on them.
+    /**
+     * Appends {@code FOR SHARE}: a shared lock that blocks updates and deletes of the matched rows
+     * but allows other shared locks.
+     *
+     * @return this step with the lock clause
+     */
     SelectStep<T> forShare();
 }

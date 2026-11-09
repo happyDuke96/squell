@@ -9,8 +9,10 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.logging.Logger;
 
-/// Wraps a `DataSource` to log every SQL statement sent through it, at `level` and shaped by
-/// `formatter`.
+/**
+ * Wraps a {@code DataSource} and logs every SQL statement sent through it, at {@code level} and
+ * rendered by {@code formatter}.
+ */
 public final class LoggingDataSource implements DataSource {
 
     private final DataSource origin;

@@ -5,7 +5,10 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/// Marks a record as a table entity; `value` is the table name. Generates a `Table` implementation.
+/**
+ * Marks an interface as a table entity and generates its {@code Table}; {@code value} is the table
+ * name.
+ */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.SOURCE)
 public @interface Entity {

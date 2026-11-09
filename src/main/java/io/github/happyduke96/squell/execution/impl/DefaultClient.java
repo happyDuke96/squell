@@ -252,9 +252,18 @@ public final class DefaultClient {
         return runTransaction(dataSource, isolationLevel, work);
     }
 
-    /// Retries `work` in a fresh `transaction(...)` while it fails with a retryable
-    /// `DataAccessException` (a deadlock, a `forUpdateNoWait()` conflict, a serialization
-    /// failure...), up to `maxAttempts` attempts, waiting `delayBetweenAttempts` between them.
+    /**
+     * Runs {@code work} in a new transaction, retrying while it fails with a retryable
+     * {@code DataAccessException} (a deadlock, a {@code forUpdateNoWait()} conflict, a
+     * serialization failure).
+     *
+     * @param maxAttempts the total number of attempts, including the first
+     * @param delayBetweenAttempts the pause between attempts
+     * @param work the unit of work
+     * @param <R> the result type
+     * @return the result of the first successful attempt
+     * @throws SQLException if every attempt fails or {@code work} throws a non-retryable exception
+     */
     public <R> R transactionWithRetry(int maxAttempts, Duration delayBetweenAttempts,
             TransactionWork<Transaction, R> work) throws SQLException {
         return transactionWithRetry(maxAttempts, delayBetweenAttempts, null, work);
@@ -376,7 +385,14 @@ public final class DefaultClient {
             identityCache.keySet().removeIf(key -> key.tableName().equals(tableName));
         }
 
-        /// Evicts exactly these rows by `@Id`; falls back to the whole table if there's no usable id.
+        /**
+         * Evicts the given rows by their {@code @Id}, or the whole table when no usable id column
+         * exists.
+         *
+         * @param table the table the rows belong to
+         * @param rows the rows to evict
+         * @param <T> the entity type
+         */
         private <T> void forgetRows(Table<T> table, List<T> rows) {
             if (!(table instanceof DefaultTable<?, ?> defaultTable)) {
                 forgetTable(table.name());
@@ -434,8 +450,7 @@ public final class DefaultClient {
                 return new CacheInvalidatingUpdateStep<>(delegate.whereVersion(field, expectedVersion), table);
             }
 
-            /// Coarse — an `execute()` only reports a row count, not which rows, so there's no id
-            /// to evict precisely.
+            // An execute() reports only a row count, not which rows, so the whole table is evicted.
             @Override
             public int execute() throws SQLException {
                 int affected = delegate.execute();
@@ -480,8 +495,21 @@ public final class DefaultClient {
             }
         }
 
-        /// Fetches by id, cached per (table, id) for this transaction, including a cached "not
-        /// found". `update`/`delete` here forget it automatically; `insert`/raw `sql` need `forget`.
+        /**
+         * Finds an entity by id, caching the result (a miss too) for the lifetime of this
+         * transaction.
+         *
+         * <p>{@code update} and {@code delete} on this transaction evict the entry; after
+         * {@code insert} or raw {@code sql} call {@link #forget}.
+         *
+         * @param table the table to look in
+         * @param id the primary key
+         * @param <T> the entity type
+         * @param <ID> the primary key type
+         * @return the entity, or empty if there is no such row
+         * @throws SQLException if the query fails
+         * @since 0.3.0
+         */
         public <T, ID> Optional<T> findCached(DefaultTable<T, ID> table, ID id) throws SQLException {
             CacheKey key = new CacheKey(table.name(), id);
             if (identityCache.containsKey(key)) {
@@ -496,7 +524,14 @@ public final class DefaultClient {
             return found;
         }
 
-        /// Evicts a cached `findCached` result — only needed after `insert`/raw `sql`.
+        /**
+         * Evicts a {@link #findCached} entry; needed only after a write that bypasses
+         * {@code update} and {@code delete}.
+         *
+         * @param table the table the entry belongs to
+         * @param id the primary key
+         * @since 0.3.0
+         */
         public void forget(Table<?> table, Object id) {
             identityCache.remove(new CacheKey(table.name(), id));
         }
@@ -505,8 +540,15 @@ public final class DefaultClient {
             return new RawStep(sql, params, source);
         }
 
-        /// REQUIRED — runs `work` against this same connection; the enclosing `transaction(...)`
-        /// call still owns the commit/rollback boundary.
+        /**
+         * Runs {@code work} on this same connection ({@code REQUIRED}); the enclosing
+         * {@code transaction(...)} call still owns commit and rollback.
+         *
+         * @param work the unit of work
+         * @param <R> the result type
+         * @return the result of {@code work}
+         * @throws SQLException if {@code work} fails
+         */
         public <R> R transaction(TransactionWork<Transaction, R> work) throws SQLException {
             return work.run(this);
         }
@@ -518,8 +560,15 @@ public final class DefaultClient {
             });
         }
 
-        /// REQUIRES_NEW — runs `work` in its own transaction on a separate connection, committed
-        /// or rolled back independently of this one.
+        /**
+         * Runs {@code work} in its own transaction on a separate connection ({@code REQUIRES_NEW}),
+         * committed or rolled back independently of this one.
+         *
+         * @param work the unit of work
+         * @param <R> the result type
+         * @return the result of {@code work}
+         * @throws SQLException if {@code work} fails
+         */
         public <R> R transactionRequiringNew(TransactionWork<Transaction, R> work) throws SQLException {
             return runTransaction(dataSource, null, work);
         }
@@ -539,8 +588,15 @@ public final class DefaultClient {
             });
         }
 
-        /// NESTED — runs `work` inside a `SAVEPOINT` on this same connection: its writes roll
-        /// back on failure without unwinding the enclosing transaction.
+        /**
+         * Runs {@code work} inside a {@code SAVEPOINT} of this transaction ({@code NESTED}); on
+         * failure only its writes roll back.
+         *
+         * @param work the unit of work
+         * @param <R> the result type
+         * @return the result of {@code work}
+         * @throws SQLException if {@code work} fails
+         */
         public <R> R transactionNested(TransactionWork<Transaction, R> work) throws SQLException {
             Connection connection = source.acquire();
             Savepoint savepoint = connection.setSavepoint();

@@ -5,8 +5,14 @@ import org.postgresql.util.PGobject;
 
 import java.sql.SQLException;
 
-/// Base for a `Converter` to a Postgres `jsonb` column; subclass and implement
-/// `serialize`/`deserialize` to/from the JSON text. See `JsonbConverter`.
+/**
+ * Base class for a converter to a Postgres {@code jsonb} column.
+ *
+ * <p>Subclasses implement {@code serialize} and {@code deserialize} to and from the JSON text; see
+ * {@code JsonbConverter}.
+ *
+ * @param <T> the Java type
+ */
 public abstract class AbstractJsonbConverter<T> implements Converter<T, PGobject> {
 
     @Override

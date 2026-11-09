@@ -203,7 +203,7 @@ Slice<Post> slice = client.select(posts)
 List<Post> loaded = client.select(posts)
         .fetch();
 
-// one WHERE post_id IN (...) query for all of them
+// one WHERE postId IN (...) query for all of them
 Map<UUID, List<Comment>> byPost = client.fetchRelated(
         loaded.stream().map(Post::id).toList(),
         comments,
@@ -244,16 +244,60 @@ Map<String, Double> avgByCategory = client.select(comments)
 ### Raw SQL
 
 ```java
-// RowMapper<R> is just ResultSet -> R
-List<String> titles = client.sql("SELECT title FROM posts WHERE status = ?", "PUBLISHED")
-        .result(row -> row.getString("title"));
-
-// a Table<T> is a RowMapper<T>
 List<Post> found = client.sql("SELECT * FROM posts WHERE id = ?", id)
         .result(posts);
+
+int updated = client.sql("UPDATE posts SET status = ? WHERE id = ?", "PUBLISHED", id)
+        .execute();
 ```
 
 Params bind positionally to `?`; the SQL text isn't escaped, so build it only from literals.
+
+### Row mappers
+
+A `RowMapper<T>` is a functional interface, `ResultSet` in, `T` out. Raw SQL (`result`, `resultOne`) and joins (`fetch`, `fetchOne`) accept one, and you can write your own.
+
+```java
+// ready-made: a generated Table is a RowMapper, it reads whole rows by column name
+List<Post> all = client.sql("SELECT * FROM posts")
+        .result(posts);
+
+// a lambda for any projection
+List<String> titles = client.sql("SELECT title FROM posts")
+        .result(row -> row.getString("title"));
+
+// your own class, reusable and testable
+record PostStats(UUID id, String title, long comments) {
+    static final RowMapper<PostStats> MAPPER = row -> new PostStats(
+            row.getObject("id", UUID.class),
+            row.getString("title"),
+            row.getLong("comments"));
+}
+
+List<PostStats> stats = client.sql("""
+                SELECT p.id, p.title, count(c.id) AS comments
+                FROM posts p LEFT JOIN comments c ON c.postId = p.id
+                GROUP BY p.id, p.title
+                """)
+        .result(PostStats.MAPPER);
+
+// compose: reuse the ready-made mapper inside your own
+record PostWithAuthor(Post post, String authorName) {
+}
+
+RowMapper<PostWithAuthor> withAuthor = row -> new PostWithAuthor(
+        posts.map(row),
+        row.getString("author_name"));
+
+Optional<PostWithAuthor> found = client.sql("""
+                SELECT p.*, a.fullName AS author_name
+                FROM posts p JOIN authors a ON a.id = p.authorId
+                WHERE p.id = ?
+                """, id)
+        .resultOne(withAuthor);
+```
+
+`resultOne` returns empty for no rows and throws `IllegalStateException` for more than one. A join takes the same mappers: `fetch(a)` is the ready-made one for the aliased side, and `fetch(row -> ...)` reads columns by position in `SELECT *` order across both tables.
 
 ### ConditionBuilder
 
